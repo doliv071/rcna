@@ -10,7 +10,6 @@ RoxygenNote: 7.3.3
 Depends: R(>= 3.4.0)
 LazyData: true
 Imports:
-    ggthemes,
     ggplot2,
     dplyr,
     RSpectra,

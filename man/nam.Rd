@@ -14,6 +14,7 @@ nam(
   filter.samples = NULL,
   force.recompute = FALSE,
   verbose = FALSE,
+  use.iter.ridge = TRUE,
   ...
 )
 }

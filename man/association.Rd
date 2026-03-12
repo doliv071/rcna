@@ -13,7 +13,8 @@ association(
   suffix = "",
   force_recompute = FALSE,
   return_nam = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  ...
 )
 }
 \arguments{
