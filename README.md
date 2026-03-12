@@ -4,7 +4,7 @@ To get started, install rcna
 
 ```{r}
 library(devtools)
-install_github('korsunskylab/rcna')
+install_github('doliv071/rcna')
 ```
 
 And follow either 
