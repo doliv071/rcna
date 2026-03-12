@@ -4,17 +4,27 @@
 \alias{dimplot.generic}
 \title{Scatterplot with color}
 \usage{
-dimplot.generic(coords, y, label = NULL)
+dimplot.generic(
+  coords,
+  y,
+  label = NULL,
+  color.low = muted("blue"),
+  color.high = muted("red")
+)
 }
 \arguments{
 \item{coords}{Coordinate table}
 
 \item{y}{Vector for colors}
 
-\item{label}{(optional) name for y vector}
+\item{label}{(optional) name for y vector.\cr
+Default: NULL}
+
+\item{color.low, color.high}{Low and high color for correlation values.\cr
+Default: muted("blue") and muted("red"), respectively}
 }
 \value{
-ggplot object
+A ggplot object
 }
 \description{
 Scatterplot with color

@@ -5,7 +5,7 @@
 #' @param samplem_vars Which sample-level covariates to include. 
 #' @param graph_use Which graph to use. By default, will use first graph in seurat_object. 
 #' 
-#' @return 
+#' @return an rnca data object (list)
 #' 
 #' @export 
 create_object.Seurat <- function(seurat_object, samplem_key, samplem_vars, graph_use=NULL) {    
@@ -21,8 +21,12 @@ create_object.Seurat <- function(seurat_object, samplem_key, samplem_vars, graph
         }
     }
     samplem_vars <- c(samplem_vars, samplem_key)
-    samplem_df <- tibble::remove_rownames(unique(dplyr::select(seurat_object@meta.data, one_of(samplem_vars))))
-    obs_df <- tibble::rownames_to_column(seurat_object@meta.data, 'CellID')
+    samplem_df <- dplyr::select(seurat_object@meta.data, dplyr::one_of(samplem_vars)) |> 
+        unique()
+    rownames(samplem_df) <- NULL
+    obs_df <- seurat_object@meta.data
+    obs_df$CellID <- rownames(obs_df)
+    rownames(obs_df) <- NULL
     if (nrow(samplem_df) == nrow(obs_df)) {
         stop(
             'Sample-level metadata is same length as cell-level metadata.       
@@ -55,7 +59,7 @@ create_object.Seurat <- function(seurat_object, samplem_key, samplem_vars, graph
 #' @param assay Which seurat assay to save results under. 
 #' @param key Which key to use for cached NAM PC dimensions. 
 #' 
-#' @return 
+#' @return A seurat object
 #' 
 #' @export 
 association.Seurat <- function(

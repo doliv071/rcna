@@ -6,7 +6,7 @@ Authors@R:
 Description: R implementation of Covarying Neighborhood Analysis, based on original python package: https://github.com/yakirr/cna. 
 License: GPL-3 + file LICENSE
 Encoding: UTF-8
-RoxygenNote: 7.1.1
+RoxygenNote: 7.3.3
 Depends: R(>= 3.4.0)
 LazyData: true
 Imports:
@@ -14,13 +14,7 @@ Imports:
     ggplot2,
     dplyr,
     RSpectra,
-    glue,
-    patchwork,
-    purrr,
     Matrix,
-    rlang,
-    tibble,
-    moments
 Suggests:
     testthat,
     knitr,

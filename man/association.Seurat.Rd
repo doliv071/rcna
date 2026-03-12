@@ -39,7 +39,7 @@ association.Seurat(
 \item{key}{Which key to use for cached NAM PC dimensions.}
 }
 \value{
-
+A seurat object
 }
 \description{
 Extract information from Seurat object to create CNA object

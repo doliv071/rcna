@@ -2,20 +2,21 @@
 % Please edit documentation in R/utils_plot.R
 \name{dimplot.ncorr}
 \alias{dimplot.ncorr}
-\title{Scatterplot with ncorr and FDR}
+\title{Scatter plot of correlation values based on FDR threshold}
 \usage{
 dimplot.ncorr(coords, res, fdr_thresh = 0.05)
 }
 \arguments{
-\item{coords}{Coordinate table}
+\item{coords}{A data.frame of coordinates (x,y).}
 
-\item{res}{result from association function}
+\item{res}{A result output from [association] function}
 
-\item{fdr_thresh}{FDR threshold}
+\item{fdr_thresh}{A numeric FDR threshold (\alpha), values larger than this
+are colored gray.}
 }
 \value{
-ggplot object
+A ggplot object
 }
 \description{
-Scatterplot with ncorr and FDR
+Scatter plot of correlation values based on FDR threshold
 }

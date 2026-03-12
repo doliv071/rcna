@@ -2,43 +2,61 @@
 % Please edit documentation in R/utils_nam.R
 \name{nam}
 \alias{nam}
-\title{Build and decompose neighborhood abundance matrix}
+\title{Build and decompose a neighborhood abundance matrix}
 \usage{
 nam(
   data,
   batches = NULL,
   covs = NULL,
-  filter_samples = NULL,
   nsteps = NULL,
-  max_frac_pcs = 0.15,
+  max.frac.pcs = 0.15,
   suffix = "",
-  force_recompute = FALSE,
-  verbose = FALSE
+  filter.samples = NULL,
+  force.recompute = FALSE,
+  verbose = FALSE,
+  ...
 )
 }
 \arguments{
-\item{data}{list containing samplem (sample-level metadata), 
-obs (cell-level metadata), and connectivities (dgCMatrix)}
+\item{data}{a list containing: 
+samplem = (sample-level metadata), 
+obs = (cell-level metadata), 
+connectivities  = (sparse symmetric weighted adjacency matrix),
+samplem_key = (character string indicating the column in samplem uniquely identifying samples),
+obs_key = (character string indicating the column in obs uniquely identifying cells),
+N = nrow(samplem_df).}
 
-\item{batches}{string(s) to denote batch variables.}
+\item{batches}{A character string denoting the column in `data$samplem` where
+batch information is stored. Only a single batch variable is allowed. \cr
+Default: NULL}
 
-\item{covs}{string(s) to denote covariate variables.}
+\item{covs}{A character string or vector denoting the column(s) `data$samplem`
+where continuous covariate information is stored.\cr
+Default: NULL}
 
-\item{filter_samples}{TBD}
+\item{nsteps}{.\cr
+Default: NULL}
 
-\item{nsteps}{TBD}
+\item{max.frac.pcs}{The number of PCs to calculate for SVD. The minimum is 10 
+and the maximum is the number of samples minus 1. \cr
+Default: 0.15}
 
-\item{max_frac_pcs}{TBD}
+\item{suffix}{A character scalar for optionally adding a suffix to the output
+components for unknown reasons. \cr
+Default: ""}
 
-\item{suffix}{TBD}
+\item{filter.samples}{STUB. Not used currently.}
 
-\item{force_recompute}{TBD}
+\item{force.recompute}{STUB. Not used currently.}
 
-\item{verbose}{TBD}
+\item{verbose}{Logical scalar controlling verbosity. \cr
+Default: FALSE}
+
+\item{...}{Additional parameters passed to [innerNAM].}
 }
 \value{
-TBD
+A list containing the NAM and associated variables.
 }
 \description{
-Build and decompose neighborhood abundance matrix
+Build and decompose a neighborhood abundance matrix
 }

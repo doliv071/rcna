@@ -21,7 +21,7 @@ create_object.Seurat(
 \item{graph_use}{Which graph to use. By default, will use first graph in seurat_object.}
 }
 \value{
-
+an rnca data object (list)
 }
 \description{
 Extract information from Seurat object to create CNA object

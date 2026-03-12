@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils_association.R
 \name{association}
 \alias{association}
-\title{Main function to perform CNA association}
+\title{Main function to perform CNA association analysis}
 \usage{
 association(
   data,
@@ -17,26 +17,44 @@ association(
 )
 }
 \arguments{
-\item{data}{list containing samplem (sample-level metadata), 
-obs (cell-level metadata), and connectivities (dgCMatrix)}
+\item{data}{a list containing: 
+samplem = (sample-level metadata), 
+obs = (cell-level metadata), 
+connectivities  = (sparse symmetric weighted adjacency matrix),
+samplem_key = (character string indicating the column in samplem uniquely identifying samples),
+obs_key = (character string indicating the column in obs uniquely identifying cells),
+N = nrow(samplem_df).}
 
-\item{y}{vector with contrast variable value for association}
+\item{y}{A vector with contrast variable value to be tested for association.}
 
-\item{batches}{string(s) to denote batch variables.}
+\item{batches}{A character string to denote batch variables.\cr
+Default: NULL}
 
-\item{covs}{string(s) to denote covariate variables.}
+\item{covs}{A character string or vector to denote covariate variables.\cr
+Default: NULL}
 
-\item{nsteps}{TBD}
+\item{nsteps}{TBD.\cr
+Default: NULL}
 
-\item{suffix}{TBD}
+\item{suffix}{A character string to be appended for unknown reasons. N.B. 
+There is a bug that will cause an error if this is combined with 
+`return_nam = TRUE`.\cr
+Default: ''}
 
-\item{force_recompute}{TBD}
+\item{force_recompute}{STUB. Ignored}
 
-\item{verbose}{TBD}
+\item{return_nam}{Logical controlling whether or not to return the NAM. See
+above for known bug.\cr
+Default: FALSE}
+
+\item{verbose}{Logical controlling the verbosity of the function.\cr
+Default: FALSE}
 }
 \value{
-TBD
+A list containing p, nullminps, k, ncorrs, fdrs, fdr_5p_t, fdr_10p_t, 
+yhat, ycond, ks, beta, r2, r2_perpc, nullr2_mean, and nullr2_std. If 
+`return_nam = TRUE`, then additionally NAM_embeddings, NAM_loadings, and NAM_svs
 }
 \description{
-Main function to perform CNA association
+Main function to perform CNA association analysis
 }
