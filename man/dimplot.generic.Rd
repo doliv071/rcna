@@ -8,8 +8,8 @@ dimplot.generic(
   coords,
   y,
   label = NULL,
-  color.low = muted("blue"),
-  color.high = muted("red")
+  color.low = "blue",
+  color.high = "red"
 )
 }
 \arguments{

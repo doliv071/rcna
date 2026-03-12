@@ -4,7 +4,13 @@
 \alias{dimplot.ncorr}
 \title{Scatter plot of correlation values based on FDR threshold}
 \usage{
-dimplot.ncorr(coords, res, fdr_thresh = 0.05)
+dimplot.ncorr(
+  coords,
+  res,
+  fdr_thresh = 0.05,
+  color.low = "blue",
+  color.high = "red"
+)
 }
 \arguments{
 \item{coords}{A data.frame of coordinates (x,y).}
@@ -13,6 +19,9 @@ dimplot.ncorr(coords, res, fdr_thresh = 0.05)
 
 \item{fdr_thresh}{A numeric FDR threshold (\alpha), values larger than this
 are colored gray.}
+
+\item{color.low, color.high}{Low and high color for correlation values.\cr
+Default: muted("blue") and muted("red"), respectively}
 }
 \value{
 A ggplot object
