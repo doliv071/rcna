@@ -17,7 +17,7 @@ dimplot.ncorr(
 
 \item{res}{A result output from [association] function}
 
-\item{fdr_thresh}{A numeric FDR threshold (\alpha), values larger than this
+\item{fdr_thresh}{A numeric FDR threshold (\eqn{\alpha}), values larger than this
 are colored gray.}
 
 \item{color.low, color.high}{Low and high color for correlation values.\cr

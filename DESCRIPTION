@@ -1,6 +1,6 @@
 Package: rcna
 Title: Covarying Neighborhood Analysis 
-Version: 0.0.99
+Version: 0.1.0
 Authors@R: 
     person("Ilya", "Korsunsky", email = "ilya.korsunsky@gmail.com", role = c("cre", "aut"), comment = c(ORCID = "0000-0003-4848-3948"))
 Description: R implementation of Covarying Neighborhood Analysis, based on original python package: https://github.com/yakirr/cna. 

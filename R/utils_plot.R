@@ -35,7 +35,7 @@ dimplot.generic <- function(coords, y,
 #' 
 #' @param coords A data.frame of coordinates (x,y). 
 #' @param res A result output from [association] function
-#' @param fdr_thresh A numeric FDR threshold (\alpha), values larger than this
+#' @param fdr_thresh A numeric FDR threshold (\eqn{\alpha}), values larger than this
 #' are colored gray.
 #' @param color.low,color.high Low and high color for correlation values.\cr
 #' Default: muted("blue") and muted("red"), respectively
