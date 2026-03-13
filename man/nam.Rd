@@ -6,16 +6,20 @@
 \usage{
 nam(
   data,
+  y,
   batches = NULL,
   covs = NULL,
-  nsteps = NULL,
+  n.steps = NULL,
+  min.steps = 3L,
+  max.steps = 15L,
+  kurtosis.delta = 3,
+  min.batch.kurtosis = 6,
   max.frac.pcs = 0.15,
+  ridges = NULL,
+  ridge.kurt.threshold = 6,
   suffix = "",
   filter.samples = NULL,
-  force.recompute = FALSE,
-  verbose = FALSE,
-  use.iter.ridge = TRUE,
-  ...
+  verbose = FALSE
 )
 }
 \arguments{
@@ -27,6 +31,9 @@ samplem_key = (character string indicating the column in samplem uniquely identi
 obs_key = (character string indicating the column in obs uniquely identifying cells),
 N = nrow(samplem_df).}
 
+\item{y}{A character string specifying the column in `data$samplem` where 
+the variable of interest is stored.\cr}
+
 \item{batches}{A character string denoting the column in `data$samplem` where
 batch information is stored. Only a single batch variable is allowed. \cr
 Default: NULL}
@@ -35,12 +42,31 @@ Default: NULL}
 where continuous covariate information is stored.\cr
 Default: NULL}
 
-\item{nsteps}{.\cr
+\item{n.steps}{Numeric scalar controlling the number of steps to take during 
+the random walk.\cr
 Default: NULL}
+
+\item{min.steps}{= .\cr
+Default: 3L}
+
+\item{max.steps}{= .\cr
+Default: 15L}
+
+\item{kurtosis.delta}{= .\cr
+Default: 3}
+
+\item{min.batch.kurtosis}{= .\cr
+Default: 6}
 
 \item{max.frac.pcs}{The number of PCs to calculate for SVD. The minimum is 10 
 and the maximum is the number of samples minus 1. \cr
 Default: 0.15}
+
+\item{ridges}{.\cr
+Default: NULL}
+
+\item{ridge.kurt.threshold}{.\cr
+Default: NULL}
 
 \item{suffix}{A character scalar for optionally adding a suffix to the output
 components for unknown reasons. \cr
@@ -48,12 +74,10 @@ Default: ""}
 
 \item{filter.samples}{STUB. Not used currently.}
 
-\item{force.recompute}{STUB. Not used currently.}
-
 \item{verbose}{Logical scalar controlling verbosity. \cr
 Default: FALSE}
 
-\item{...}{Additional parameters passed to [innerNAM].}
+\item{...}{Additional parameters passed to [buildNAM()].}
 }
 \value{
 A list containing the NAM and associated variables.

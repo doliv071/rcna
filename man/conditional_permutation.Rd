@@ -4,7 +4,7 @@
 \alias{conditional_permutation}
 \title{Permute Y conditioned on B}
 \usage{
-conditional_permutation(B, Y, num, duplicates.ok = TRUE)
+conditional_permutation(B, Y, num, seed, duplicates.ok = TRUE)
 }
 \arguments{
 \item{B}{a numeric batch vector}
@@ -12,6 +12,12 @@ conditional_permutation(B, Y, num, duplicates.ok = TRUE)
 \item{Y}{the variable of interest, scaled}
 
 \item{num}{Number of permutations to perform}
+
+\item{seed}{.\cr
+Default: NULL}
+
+\item{duplicates.ok}{.\cr
+Default: NULL}
 }
 \value{
 A matrix of permutations of Y conditioned on B

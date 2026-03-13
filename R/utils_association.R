@@ -23,12 +23,13 @@ regress <- function(q, k, U) {
 #' @param n number of samples
 #' @param r degrees of freedom
 #' @param log.p A logical whether the log transformed p-value value should be 
-#' calculated
+#' calculated.\cr
+#' Default: FALSE
 #' 
 #' @returns A list containing p-value and r^2 for the F-test
 #' 
 #' @keywords internal
-calcStats <- function(yhat, ycond, k, n, r, log.p = TRUE) {
+calcStats <- function(yhat, ycond, k, n, r, log.p = FALSE) {
     ssefull <- crossprod(yhat - ycond)
     ssered <- crossprod(ycond)
     deltasse <-  ssered - ssefull
@@ -53,17 +54,20 @@ calcStats <- function(yhat, ycond, k, n, r, log.p = TRUE) {
 #' @param U a matrix whose columns contain the left singular vectors of x 
 #' (U returned by [svdNAM])
 #' @param r the degrees of freedom (r returned by [residNAM])
+#' @param use.logp A logical whether the log transformed p-value value should be 
+#' calculated.\cr
+#' Default: FALSE
 #' 
 #' @returns A list containing the k, p, and r^2 for k which produces the minimum
 #' p-value.
 #' 
 #' @keywords internal
-minpStats <- function(M, y, ks, U, r) {
+minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
     n <- length(y)
     zcond <- M %*% y
     zcond <- scale(zcond, center = FALSE, scale = TRUE)
     qhats <- lapply(ks, function(k) regress(zcond, k, U)$qhat)
-    .tmp <- lapply(seq_along(ks), function(i) calcStats(qhats[[i]], zcond, ks[i], n, r))
+    .tmp <- lapply(seq_along(ks), function(i) calcStats(qhats[[i]], zcond, ks[i], n, r, log.p = use.logp))
     ps <- vapply(.tmp, \(x) x$p, numeric(1))
     r2s <- vapply(.tmp, \(x) x$r2, numeric(1))
     k_ <- which.min(ps)
@@ -90,6 +94,9 @@ minpStats <- function(M, y, ks, U, r) {
 #' @param local_test A logical, whether or not to perform local test of neighborhood
 #' correlations. \cr
 #' Default: TRUE
+#' @param use.logp A logical whether the log transformed p-value value should be 
+#' calculated. Set to TRUE if your FDRs are incredibly small or 0. \cr
+#' Default: FALSE
 #' @param seed A numeric seed to set. Set if you want to repeat exact permutations
 #' as a previous run. If NULL, a random seed is chosen. \cr
 #' Default: NULL
@@ -118,14 +125,15 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
                              force_permute_all = FALSE, 
                              allow_duplicate_perms = TRUE,
                              local_test = TRUE, 
+                             use.logp = FALSE,
                              seed = NULL) {
     if (is.null(seed)) {
         seed <- sample(1e6, 1)
-        set.seed(seed)
     }
+    set.seed(seed)
     if (force_permute_all) {
         batches_vec <- rep(1L, length(y))
-    }
+    } 
     
     # prep data
     U <- NAMsvd[["NAM_sampleXpc"]]
@@ -147,10 +155,10 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
                     dim(U)[2] - 1)
             ks <- seq(1, dim(U)[2] - 1, 1)
         }
-    }
+    } 
     
     # get non-null f-test p-value
-    mp <- minpStats(M, y, ks, U, r)
+    mp <- minpStats(M, y, ks, U, r, use.logp = use.logp)
     k <- mp$k 
     p <- mp$p 
     r2 <- mp$r2
@@ -173,8 +181,9 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
     
     # compute final p-value using Nnull null f-test p-values
     y_null <- conditional_permutation(batches_vec, y, Nnull, 
-                                      duplicates.ok = allow_duplicate_perms)
-    .tmp <- apply(y_null, 2, \(z) minpStats(M, z, ks, U, r))
+                                      duplicates.ok = allow_duplicate_perms, 
+                                      seed = seed)
+    .tmp <- apply(y_null, 2, \(z) minpStats(M, z, ks, U, r, use.logp = use.logp))
     minps_null <- vapply(.tmp, \(x) x$p, numeric(1))
     nullr2s <- vapply(.tmp, \(x) x$r2, numeric(1))
     # add sqrt(.Machine$double.eps) for floating point maths and add 1 to avoid pfinal = 0
@@ -248,77 +257,124 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #' samplem_key = (character string indicating the column in samplem uniquely identifying samples),
 #' obs_key = (character string indicating the column in obs uniquely identifying cells),
 #' N = nrow(samplem_df).
-#' @param y A vector with contrast variable value to be tested for association.
-#' @param batches A character string to denote batch variables.\cr
+#' @param y A character string specifying the column in `samplem` containing
+#' the variable of interest.
+#' @param batches A character string specifying the column in `samplem` 
+#' containing the batch variable. Only a single batch variable is currently supported. \cr
 #' Default: NULL
-#' @param covs A character string or vector to denote covariate variables.\cr
+#' @param covs A character string or vector specifying the column(s) in `samplem` 
+#' containing the covariate variables.\cr
 #' Default: NULL
-#' @param nsteps TBD.\cr
+#' @param n.steps Number of steps to take during the random walk. If specified then
+#' exactly this many steps is taken on the random walk. \cr
 #' Default: NULL
-#' @param suffix A character string to be appended for unknown reasons. N.B. 
-#' There is a bug that will cause an error if this is combined with 
-#' `return_nam = TRUE`.\cr
+#' @param suffix A character string to be appended for unknown reasons.\cr
 #' Default: ''
-#' @param return_nam Logical controlling whether or not to return the NAM. See
-#' above for known bug.\cr
+#' @param return.nam Logical controlling whether or not to return the NAM. \cr
 #' Default: FALSE
+#' @param filter.samples STUB. Currently ignored.\cr
+#' @param Ks One of NULL, a numeric scalar, or a numeric vector. If NULL, then 
+#' `seq(n/50, n/5, length.out = 4)` are checked. If a numeric scalar then 1:Ks are
+#' checked. If a numeric vector, then all supplied values are checked. \cr
+#' Default: NULL
+#' @param N.nulls .\cr
+#' Default: 1000
+#' @param force.permute.all .\cr
+#' Default: FALSE
+#' @param allow.duplicate.perms .\cr
+#' Default: TRUE
+#' @param local.test .\cr
+#' Default: TRUE
+#' @param use.logp A logical whether the log transformed p-value value should be 
+#' calculated. Set to TRUE if your FDRs are incredibly small or 0. \cr
+#' Default: FALSE
+#' @param seed .\cr
+#' Default: NULL
 #' @param verbose Logical controlling the verbosity of the function.\cr
 #' Default: FALSE
-#' @param force_recompute STUB. Ignored
+#' @param ... Additional parameters passed to [nam()]
 #' 
 #' @return A list containing p, nullminps, k, ncorrs, fdrs, fdr_5p_t, fdr_10p_t, 
 #' yhat, ycond, ks, beta, r2, r2_perpc, nullr2_mean, and nullr2_std. If 
-#' `return_nam = TRUE`, then additionally NAM_embeddings, NAM_loadings, and NAM_svs
+#' `return.nam = TRUE`, then additionally NAM_embeddings, NAM_loadings, and NAM_svs
 #' 
 #' @export 
-association <- function(data, 
-                        y, # TODO: y should be taken from data$samplem directly 
+association <- function(data, nam.result, y, 
                         batches = NULL, 
                         covs = NULL, 
-                        nsteps = NULL, 
+                        n.steps = NULL, 
                         suffix = '',
-                        force_recompute = FALSE, 
-                        return_nam = FALSE, 
+                        return.nam = FALSE, 
+                        filter.samples = NULL,
+                        # passed to inner association
+                        Ks = NULL, 
+                        N.nulls = 1000, 
+                        force.permute.all = FALSE, 
+                        allow.duplicate.perms = TRUE,
+                        local.test = TRUE, 
+                        use.logp = FALSE,
+                        seed = NULL,
                         verbose = TRUE, 
                         ...) {
+    if(missing(data) && missing(nam.result)){
+        stop("One of 'data' or 'nam.result' must be specified.")
+    } else if(!missing(data) && !missing(nam.result)){
+        warning("both 'data' and 'nam.result' were supplied,", 
+                " using nam.result for association test.", 
+                immediate. = TRUE, call. = FALSE)
+    }
+    # TODO: check NAs in batches and covariates.
+    stopifnot(length(batches) == 1)
+    stopifnot(batches %in% colnames(data$samplem))
+    stopifnot(all(covs %in% colnames(data$samplem)))
+    if(!is.null(n.steps)){
+        stopifnot(length(n.steps) == 1 && is.numeric(n.steps))
+    }
+    stopifnot(length(suffix) == 1 && is.character(suffix))
+    stopifnot(length(return.nam) == 1 && is.logical(return.nam))
+    stopifnot(length(N.nulls) == 1 && is.numeric(N.nulls))
     
-    # formatting and error checking
+    stopifnot(length(force.permute.all) == 1 && is.logical(force.permute.all))
+    stopifnot(length(allow.duplicate.perms) == 1 && is.logical(allow.duplicate.perms))
+    stopifnot(length(local.test) == 1 && is.logical(local.test))
+    stopifnot(length(use.logp) == 1 && is.logical(use.logp))
+    stopifnot(length(verbose) == 1 && is.logical(verbose))
     
-    
-    ## CHECK: need _df_to_array in R? 
-    #     covs = _df_to_array(data, covs)
-    #     batches = _df_to_array(data, batches)
-    #     y = _df_to_array(data, y)
-    
-    ## TODO: check lengths
-    #     if y.shape != (data.N,):
-    #         raise ValueError(
-    #             'y should be an array of length data.N; instead its shape is: '+str(y.shape))
+    if(!is.null(Ks)){
+        stopifnot(is.numeric(Ks))
+    }
     
     ## TODO: add sample filtering 
-    #     if covs is not None:
-    #         filter_samples = ~(np.isnan(y) | np.any(np.isnan(covs), axis=1))
-    #     else:
-    #         filter_samples = ~np.isnan(y)
     
-    ## Here, data has all the du things 
-    #     du = data.uns
     if (verbose) message('Build NAM PCs')
-    nam_res <- nam(data, 
-                   batches = batches, 
-                   covs = covs, 
-                   filter.samples = filter_samples,
-                   nsteps = nsteps, 
-                   suffix = suffix,
-                   force.recompute = force_recompute)
+    if(missing(nam.result)){
+        # formatting and error checking
+        stopifnot(all(c("samplem", "obs", "connectivities", 
+                        "samplem_key", "obs_key", "N") %in% names(data)))
+        nam_res <- nam(data, y = y, 
+                       batches = batches, 
+                       covs = covs, 
+                       filter.samples = filter.samples,
+                       n.steps = n.steps, 
+                       suffix = suffix, 
+                       verbose = verbose,
+                       ...)
+    } else {
+        nam_res <- nam.result
+    }
     
     ## For association, batches needs to be a numeric vector
     if (is.null(batches)) {
-        batches_vec <- rep(1, data$N)
+        X <- rep(1, data$N)
+        # X <- Matrix::Matrix(rep(1, data$N), ncol = 1, sparse = TRUE)
     } else {
-        batches_vec <- dplyr::select(data$samplem, dplyr::one_of(batches)) |>
-            as.matrix() |>
-            as.integer()
+        X <- dplyr::pull(data$samplem, dplyr::one_of(batches)) |> 
+            as.factor()
+        
+        # batches_df <- data$samplem[, batches, drop = FALSE] 
+        # bform <- paste0("~ 0 + ", paste0(colnames(batches_df), collapse = " + ")) |> 
+        #     as.formula()
+        # X <- Matrix::sparse.model.matrix(bform, batches_df)
     }
     
     if (verbose) message('Perform association testing')
@@ -326,17 +382,19 @@ association <- function(data,
     #         y[nam_res[[paste0('_filter_samples', suffix)]]],
     #         batches[nam_res[paste0('_filter_samples', suffix)]] 
     res <- innerAssociation(NAMsvd = nam_res,
-                            y = y, 
-                            batches_vec = batches_vec, 
-                            ...)
-    
-    if (return_nam) {
-        #         res[[paste0('NAM_embeddings', suffix)]] <- nam_res$NAM_nbhdXpc
-        #         res[[paste0('NAM_loadings', suffix)]] <- nam_res$NAM_sampleXpc
-        #         res[[paste0('NAM_svs', suffix)]] <- nam_res$NAM_svs
-        res[['NAM_embeddings']] <- nam_res$NAM_nbhdXpc
-        res[['NAM_loadings']] <- nam_res$NAM_sampleXpc
-        res[['NAM_svs']] <- nam_res$NAM_svs
+                            y = nam_res$y, 
+                            batches_vec = X, 
+                            ks = Ks, 
+                            Nnull = N.nulls, 
+                            force_permute_all = force.permute.all, 
+                            allow_duplicate_perms = allow.duplicate.perms, 
+                            local_test = local.test, 
+                            use.logp = use.logp, 
+                            seed = seed)
+    if (return.nam) {
+        res[[paste0('NAM_embeddings', suffix)]] <- nam_res[[paste0("NAM_nbhdXpc", suffix)]]
+        res[[paste0('NAM_loadings', suffix)]] <- nam_res[[paste0("NAM_sampleXpc", suffix)]]
+        res[[paste0('NAM_svs', suffix)]] <- nam_res[[paste0("NAM_svs", suffix)]]
     }
     # TODO: add info about kept cells
     #     vars(res)['kept'] = du['keptcells'+suffix]

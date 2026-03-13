@@ -6,13 +6,21 @@
 \usage{
 association(
   data,
+  nam.result,
   y,
   batches = NULL,
   covs = NULL,
-  nsteps = NULL,
+  n.steps = NULL,
   suffix = "",
-  force_recompute = FALSE,
-  return_nam = FALSE,
+  return.nam = FALSE,
+  filter.samples = NULL,
+  Ks = NULL,
+  N.nulls = 1000,
+  force.permute.all = FALSE,
+  allow.duplicate.perms = TRUE,
+  local.test = TRUE,
+  use.logp = FALSE,
+  seed = NULL,
   verbose = TRUE,
   ...
 )
@@ -26,35 +34,62 @@ samplem_key = (character string indicating the column in samplem uniquely identi
 obs_key = (character string indicating the column in obs uniquely identifying cells),
 N = nrow(samplem_df).}
 
-\item{y}{A vector with contrast variable value to be tested for association.}
+\item{y}{A character string specifying the column in `samplem` containing
+the variable of interest.}
 
-\item{batches}{A character string to denote batch variables.\cr
+\item{batches}{A character string specifying the column in `samplem` 
+containing the batch variable. Only a single batch variable is currently supported. \cr
 Default: NULL}
 
-\item{covs}{A character string or vector to denote covariate variables.\cr
+\item{covs}{A character string or vector specifying the column(s) in `samplem` 
+containing the covariate variables.\cr
 Default: NULL}
 
-\item{nsteps}{TBD.\cr
+\item{n.steps}{Number of steps to take during the random walk. If specified then
+exactly this many steps is taken on the random walk. \cr
 Default: NULL}
 
-\item{suffix}{A character string to be appended for unknown reasons. N.B. 
-There is a bug that will cause an error if this is combined with 
-`return_nam = TRUE`.\cr
+\item{suffix}{A character string to be appended for unknown reasons.\cr
 Default: ''}
 
-\item{force_recompute}{STUB. Ignored}
-
-\item{return_nam}{Logical controlling whether or not to return the NAM. See
-above for known bug.\cr
+\item{return.nam}{Logical controlling whether or not to return the NAM. \cr
 Default: FALSE}
+
+\item{filter.samples}{STUB. Currently ignored.\cr}
+
+\item{Ks}{One of NULL, a numeric scalar, or a numeric vector. If NULL, then 
+`seq(n/50, n/5, length.out = 4)` are checked. If a numeric scalar then 1:Ks are
+checked. If a numeric vector, then all supplied values are checked. \cr
+Default: NULL}
+
+\item{N.nulls}{.\cr
+Default: 1000}
+
+\item{force.permute.all}{.\cr
+Default: FALSE}
+
+\item{allow.duplicate.perms}{.\cr
+Default: TRUE}
+
+\item{local.test}{.\cr
+Default: TRUE}
+
+\item{use.logp}{A logical whether the log transformed p-value value should be 
+calculated. Set to TRUE if your FDRs are incredibly small or 0. \cr
+Default: FALSE}
+
+\item{seed}{.\cr
+Default: NULL}
 
 \item{verbose}{Logical controlling the verbosity of the function.\cr
 Default: FALSE}
+
+\item{...}{Additional parameters passed to [nam()]}
 }
 \value{
 A list containing p, nullminps, k, ncorrs, fdrs, fdr_5p_t, fdr_10p_t, 
 yhat, ycond, ks, beta, r2, r2_perpc, nullr2_mean, and nullr2_std. If 
-`return_nam = TRUE`, then additionally NAM_embeddings, NAM_loadings, and NAM_svs
+`return.nam = TRUE`, then additionally NAM_embeddings, NAM_loadings, and NAM_svs
 }
 \description{
 Main function to perform CNA association analysis

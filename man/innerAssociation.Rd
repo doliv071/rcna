@@ -13,6 +13,7 @@ innerAssociation(
   force_permute_all = FALSE,
   allow_duplicate_perms = TRUE,
   local_test = TRUE,
+  use.logp = FALSE,
   seed = NULL
 )
 }
@@ -38,6 +39,10 @@ Default: FALSE}
 \item{local_test}{A logical, whether or not to perform local test of neighborhood
 correlations. \cr
 Default: TRUE}
+
+\item{use.logp}{A logical whether the log transformed p-value value should be 
+calculated. Set to TRUE if your FDRs are incredibly small or 0. \cr
+Default: FALSE}
 
 \item{seed}{A numeric seed to set. Set if you want to repeat exact permutations
 as a previous run. If NULL, a random seed is chosen. \cr

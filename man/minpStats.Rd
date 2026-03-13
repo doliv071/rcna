@@ -4,7 +4,7 @@
 \alias{minpStats}
 \title{Calculate the p-value for all ks and return the minimum}
 \usage{
-minpStats(M, y, ks, U, r)
+minpStats(M, y, ks, U, r, use.logp = FALSE)
 }
 \arguments{
 \item{M}{the annihilator matrix (M returned by [residNAM])}
@@ -17,6 +17,10 @@ minpStats(M, y, ks, U, r)
 (U returned by [svdNAM])}
 
 \item{r}{the degrees of freedom (r returned by [residNAM])}
+
+\item{use.logp}{A logical whether the log transformed p-value value should be 
+calculated.\cr
+Default: FALSE}
 }
 \value{
 A list containing the k, p, and r^2 for k which produces the minimum

@@ -3,13 +3,17 @@
 #' @param B a numeric batch vector
 #' @param Y the variable of interest, scaled
 #' @param num Number of permutations to perform
-#' 
+#' @param duplicates.ok .\cr
+#' Default: NULL
+#' @param seed .\cr
+#' Default: NULL
 #' @returns A matrix of permutations of Y conditioned on B
 #' 
 #' @keywords internal
-conditional_permutation <- function(B, Y, num, duplicates.ok = TRUE) {
+conditional_permutation <- function(B, Y, num, seed, duplicates.ok = TRUE) {
     # TODO: for certain combinations of length(Y) and B it is better to compute
     #       all permutations rather than sampling and filtering duplicates.
+    set.seed(seed)
     y_perm <- lapply(seq_len(num), function(i) {
         res <- split(seq_len(length(Y)), B) |> 
             lapply(\(idx) {

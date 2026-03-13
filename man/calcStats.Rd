@@ -4,7 +4,7 @@
 \alias{calcStats}
 \title{Calculate the F-test p-value}
 \usage{
-calcStats(yhat, ycond, k, n, r, log.p = TRUE)
+calcStats(yhat, ycond, k, n, r, log.p = FALSE)
 }
 \arguments{
 \item{yhat}{y fit to the data}
@@ -18,7 +18,8 @@ calcStats(yhat, ycond, k, n, r, log.p = TRUE)
 \item{r}{degrees of freedom}
 
 \item{log.p}{A logical whether the log transformed p-value value should be 
-calculated}
+calculated.\cr
+Default: FALSE}
 }
 \value{
 A list containing p-value and r^2 for the F-test
