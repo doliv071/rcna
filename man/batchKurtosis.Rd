@@ -7,7 +7,7 @@
 batchKurtosis(NAM, batch)
 }
 \arguments{
-\item{NAM}{A NAM matrix as calculated by}
+\item{NAM}{A NAM matrix as calculated by [buildNAM()]}
 
 \item{batch}{A factor containing batch information}
 }

@@ -18,5 +18,6 @@ Suggests:
     testthat,
     knitr,
     rmarkdown,
-    Seurat 
+    Seurat,
+    SingleCellExperiment
 VignetteBuilder: knitr

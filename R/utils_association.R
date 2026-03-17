@@ -78,7 +78,7 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 }
 
 #' Calculate global and (optionally) local association tests.
-#'
+#' 
 #' @param NAMsvd The list output from the [nam()] function.
 #' @param y A vector with contrast variable value to be tested for association.
 #' @param batches_vec A factor or numeric vector of batches to adjust for.
@@ -101,22 +101,32 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #' as a previous run. If NULL, a random seed is chosen. \cr
 #' Default: NULL
 #'
-#' @returns A list. 
-#' list(p = pfinal, 
-#' minps_null = minps_null,
-#' k = k,
-#' ncorrs = ncorrs, 
-#' fdrs = fdrs,
-#' fdr_5p_t = fdr_5p_t, 
-#' fdr_10p_t = fdr_10p_t,
-#' yhat = yhat, 
-#' ycond = ycond,
-#' ks = ks, 
-#' beta = beta,
-#' r2 = r2, 
-#' r2_perpc = r2_perpc,
-#' nullr2_mean = mean(nullr2s), 
-#' nullr2_std = sd(nullr2s))
+#' @returns A named list with the following elements:
+#' \describe{
+#'   \item{p}{Empirical global association p-value from permutation test.}
+#'   \item{minps_null}{Numeric vector of length \code{Nnull} containing the
+#'     minimum permutation p-values from the null distribution.}
+#'   \item{k}{Integer. The number of NAM PCs selected by the minimum p-value
+#'     criterion.}
+#'   \item{ncorrs}{Matrix of neighborhood-level association scores, rows
+#'     corresponding to neighborhoods.}
+#'   \item{fdrs}{Data frame of FDR results from \code{\link{empirical_fdrs}},
+#'     or \code{NULL} if \code{local_test = FALSE}. Columns: \code{threshold},
+#'     \code{fdr}, \code{num_detected}.}
+#'   \item{fdr_5p_t}{Numeric scalar. Minimum threshold achieving FDR < 5\%,
+#'     or \code{NULL} if none exists.}
+#'   \item{fdr_10p_t}{Numeric scalar. Minimum threshold achieving FDR < 10\%,
+#'     or \code{NULL} if none exists.}
+#'   \item{yhat}{Fitted values of \code{y} from the selected k-component model.}
+#'   \item{ycond}{Batch/covariate-conditioned and scaled \code{y} vector.}
+#'   \item{ks}{Numeric vector of k values that were tested.}
+#'   \item{beta}{Regression coefficients for the selected k-component model.}
+#'   \item{r2}{R-squared for the selected model.}
+#'   \item{r2_perpc}{Per-PC contribution to R-squared, length \code{k}.}
+#'   \item{nullr2_mean}{Mean R-squared across null permutations.}
+#'   \item{nullr2_std}{Standard deviation of R-squared across null permutations.}
+#'   \item{seed}{The integer seed used for permutations, for reproducibility.}
+#' }
 #' 
 #' @keywords internal
 innerAssociation <- function(NAMsvd, y, batches_vec, 
@@ -294,9 +304,38 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #' Default: FALSE
 #' @param ... Additional parameters passed to [nam()]
 #' 
-#' @return A list containing p, nullminps, k, ncorrs, fdrs, fdr_5p_t, fdr_10p_t, 
-#' yhat, ycond, ks, beta, r2, r2_perpc, nullr2_mean, and nullr2_std. If 
-#' `return.nam = TRUE`, then additionally NAM_embeddings, NAM_loadings, and NAM_svs
+#' @return A named list with the following elements:
+#' \describe{
+#'   \item{p}{Empirical global association p-value from permutation test.}
+#'   \item{minps_null}{Numeric vector of length \code{Nnull} containing the
+#'     minimum permutation p-values from the null distribution.}
+#'   \item{k}{Integer. The number of NAM PCs selected by the minimum p-value
+#'     criterion.}
+#'   \item{ncorrs}{Matrix of neighborhood-level association scores, rows
+#'     corresponding to neighborhoods.}
+#'   \item{fdrs}{Data frame of FDR results from \code{\link{empirical_fdrs}},
+#'     or \code{NULL} if \code{local_test = FALSE}. Columns: \code{threshold},
+#'     \code{fdr}, \code{num_detected}.}
+#'   \item{fdr_5p_t}{Numeric scalar. Minimum threshold achieving FDR < 5\%,
+#'     or \code{NULL} if none exists.}
+#'   \item{fdr_10p_t}{Numeric scalar. Minimum threshold achieving FDR < 10\%,
+#'     or \code{NULL} if none exists.}
+#'   \item{yhat}{Fitted values of \code{y} from the selected k-component model.}
+#'   \item{ycond}{Batch/covariate-conditioned and scaled \code{y} vector.}
+#'   \item{ks}{Numeric vector of k values that were tested.}
+#'   \item{beta}{Regression coefficients for the selected k-component model.}
+#'   \item{r2}{R-squared for the selected model.}
+#'   \item{r2_perpc}{Per-PC contribution to R-squared, length \code{k}.}
+#'   \item{nullr2_mean}{Mean R-squared across null permutations.}
+#'   \item{nullr2_std}{Standard deviation of R-squared across null permutations.}
+#'   \item{seed}{The integer seed used for permutations, for reproducibility.}
+#'   \item{NAM_embeddings}{The Neighborhood x PCs matrix (The Left singular vectors 
+#'   returned by [scd()]). If \code{return.nam = TRUE}}
+#'   \item{NAM_loadings}{The Sample x PCs matrix (The Right singular vectors 
+#'   returned by [scd()]). If \code{return.nam = TRUE}}
+#'   \item{NAM_svs}{The _squared_ singular values returned by [scd()]. 
+#'   If \code{return.nam = TRUE}}
+#' }
 #' 
 #' @export 
 association <- function(data, nam.result, y, 
@@ -323,12 +362,14 @@ association <- function(data, nam.result, y,
                 " using nam.result for association test.", 
                 immediate. = TRUE, call. = FALSE)
     }
-    if(!missing(data)){
+    if(!missing(data) && missing(nam.result)){
+        stopifnot(all(c("samplem", "obs", "connectivities", 
+                        "samplem_key", "obs_key", "N") %in% names(data)))
         stopifnot(batches %in% colnames(data$samplem))
         stopifnot(all(covs %in% colnames(data$samplem)))
     }
     # TODO: check NAs in batches and covariates.
-    stopifnot(length(batches) == 1)
+    stopifnot(length(batches) == 1 || is.null(batches))
     if(!is.null(n.steps)){
         stopifnot(length(n.steps) == 1 && is.numeric(n.steps))
     }
@@ -350,9 +391,6 @@ association <- function(data, nam.result, y,
     
     if (verbose) message('Build NAM PCs')
     if(missing(nam.result)){
-        # formatting and error checking
-        stopifnot(all(c("samplem", "obs", "connectivities", 
-                        "samplem_key", "obs_key", "N") %in% names(data)))
         nam_res <- nam(data, y = y, 
                        batches = batches, 
                        covs = covs, 

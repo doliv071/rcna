@@ -436,20 +436,44 @@ nam <- function(data, y,
     if(missing(data) || missing(y)){
         stop("missing parameters with no defaults.")
     }
+    stopifnot(all(c("samplem", "obs", "connectivities", 
+                    "samplem_key", "obs_key", "N") %in% names(data)))
+    stopifnot(is.null(batches) || (is.character(batches) && length(batches) == 1))
+    stopifnot(is.null(covs) || (is.character(covs)))
+    # passed to buildNAM
+    stopifnot(is.null(n.steps) || (is.numeric(n.steps) && length(n.steps) == 1))
+    stopifnot(is.numeric(min.steps) && length(min.steps) == 1)
+    stopifnot(is.numeric(max.steps) && length(max.steps) == 1)
+    stopifnot(is.numeric(kurtosis.delta) && length(kurtosis.delta) == 1)
+    # passed to qcNAM
+    stopifnot(is.numeric(min.batch.kurtosis) && length(min.batch.kurtosis) == 1)
+    stopifnot(is.numeric(max.frac.pcs) && length(max.frac.pcs) == 1)
+    # passed to residNAM
+    stopifnot(is.character(method) && length(method) == 1)
+    method <- match.arg(method, c("ridge", "ols"))
+    stopifnot(is.character(method) && length(method) == 1)
+    stopifnot(is.null(partial.by) || (is.character(partial.by) && length(n.steps) == 1))
+    partial.by <- match.arg(partial.by, c("batches", "covariates"))
+    stopifnot(is.null(ridges) || is.numeric(ridges))
+    # general
+    stopifnot(is.character(suffix) && length(suffix) == 1)
+    
     if(!is.null(n.steps) && n.steps > max.steps){
+        warning("'n.steps' is larger than 'max.steps', updating 'max.steps' to allow", 
+                " at least 'n.steps'.", call. = FALSE, immediate. = TRUE)
         max.steps <- n.steps
     }
-    ## TODO: check inputs! 
     
     res <- list()
     ## TODO: Filtering should happen at top level, either during data object
     ##       build or as a helper to manipulate existing data object
     
-    # TODO: it would be cleaner overall if nam accepted either a character string
-    #       for top level use, or a model.matrix for internal use by association
     if (is.null(batches)) {
         batch_vec <- NULL
-    } else {        
+    } else {
+        if(!batches %in% colnames(data$samplem)){
+            stop("Could not find batches: ", batches, " in `colnames(data$samplem)`")
+        }
         # batches must be categorical or factor
         # TODO: handle multiple batches
         batch_vec <- dplyr::pull(data$samplem, dplyr::one_of(batches)) |> 
@@ -459,6 +483,7 @@ nam <- function(data, y,
         cov_mat <- NULL
     } else {
         # covariates must be numeric or factors
+        # TODO: actually check that they are numeric
         cov_mat <- data$samplem[, covs, drop = FALSE] |> 
             as("sparseMatrix")
         # # covariates must be numeric or factors

@@ -15,7 +15,7 @@ nam(
   kurtosis.delta = 3,
   min.batch.kurtosis = 6,
   max.frac.pcs = 0.15,
-  method = c("ols", "ridge"),
+  method = c("ridge", "ols"),
   partial.by = NULL,
   ridges = NULL,
   suffix = "",
@@ -47,27 +47,43 @@ Default: NULL}
 the random walk.\cr
 Default: NULL}
 
-\item{min.steps}{= .\cr
+\item{min.steps}{Numeric scalar. Minimum number of steps to take on the random
+walk.\cr
 Default: 3L}
 
-\item{max.steps}{= .\cr
+\item{max.steps}{Numeric scalar. Maximum number of steps to take on the random
+walk.\cr
 Default: 15L}
 
-\item{kurtosis.delta}{= .\cr
+\item{kurtosis.delta}{Numeric scalar. Minimum kurtosis change below which the
+random walk can stop (after travelling at least `min.steps`).\cr
 Default: 3}
 
-\item{min.batch.kurtosis}{= .\cr
+\item{min.batch.kurtosis}{Sets the minimum threshold below which cells are kept
+during QC. This ensures that when kurtosis is not extreme between batches
+then cells are not filtered. `threshold <- max(min.batch.kurtosis, 2*median(kurtoses))`.\cr
 Default: 6}
 
 \item{max.frac.pcs}{The number of PCs to calculate for SVD. The minimum is 10 
 and the maximum is the number of samples minus 1. \cr
 Default: 0.15}
 
-\item{ridges}{.\cr
+\item{method}{A character string specifying what method to use for batch
+and covariate correction. Options are: c("ridge", "ols"), Setting to "ridge"
+will reproduce original behavior.}
+
+\item{partial.by}{A character string. One of NULL, "batches", or "covariates". If 
+`method == "ridge"` then ridge penalties are only applied to those variables.
+If null then all variables are penalized. Setting to "batches" will reproduce
+original behavior.\cr
+Default: NULL}
+
+\item{ridges}{A numeric vector of ridges to try during ridge regression. When
+NULL ridges are calculated automatically. \cr
 Default: NULL}
 
 \item{suffix}{A character scalar for optionally adding a suffix to the output
-components for unknown reasons. \cr
+components. \cr
 Default: ""}
 
 \item{filter.samples}{STUB. Not used currently.}

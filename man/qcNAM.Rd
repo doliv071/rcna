@@ -14,6 +14,8 @@ qcNAM(NAM, batch = NULL, min.threshold = 6, verbose = FALSE)
 \item{min.threshold}{A numeric scalar defining the minimum value which the 
 threshold should take.\cr
 Default: 6}
+
+\item{verbose}{Logical. Controls verbosity.}
 }
 \value{
 A list containing the filtered NAM (NAM) and a logical vector indicating

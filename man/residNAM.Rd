@@ -23,6 +23,16 @@ Default NULL}
 \item{batch}{A factor containing batch information.\cr
 Default NULL}
 
+\item{method}{A character string specifying what method to use for batch
+and covariate correction. Options are: c("ridge", "ols"), Setting to "ridge"
+will reproduce original behavior.}
+
+\item{partial.by}{A character string. One of NULL, "batches", or "covariates". If 
+`method == "ridge"` then ridge penalties are only applied to those variables.
+If null then all variables are penalized. Setting to "batches" will reproduce
+original behavior.\cr
+Default: NULL}
+
 \item{ridges}{A numeric vector of ridge penalties to try. If NULL, a default
 set of ridges is used `c(1e5, 1e4, 1e3, 1e2, 1e1, 1e0, 1e-1, 1e-2, 1e-3, 1e-4, 0)`.\cr
 Default NULL}
