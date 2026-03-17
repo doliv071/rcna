@@ -15,8 +15,9 @@ nam(
   kurtosis.delta = 3,
   min.batch.kurtosis = 6,
   max.frac.pcs = 0.15,
+  method = c("ols", "ridge"),
+  partial.by = NULL,
   ridges = NULL,
-  ridge.kurt.threshold = 6,
   suffix = "",
   filter.samples = NULL,
   verbose = FALSE
@@ -63,9 +64,6 @@ and the maximum is the number of samples minus 1. \cr
 Default: 0.15}
 
 \item{ridges}{.\cr
-Default: NULL}
-
-\item{ridge.kurt.threshold}{.\cr
 Default: NULL}
 
 \item{suffix}{A character scalar for optionally adding a suffix to the output

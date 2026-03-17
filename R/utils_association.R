@@ -323,10 +323,12 @@ association <- function(data, nam.result, y,
                 " using nam.result for association test.", 
                 immediate. = TRUE, call. = FALSE)
     }
+    if(!missing(data)){
+        stopifnot(batches %in% colnames(data$samplem))
+        stopifnot(all(covs %in% colnames(data$samplem)))
+    }
     # TODO: check NAs in batches and covariates.
     stopifnot(length(batches) == 1)
-    stopifnot(batches %in% colnames(data$samplem))
-    stopifnot(all(covs %in% colnames(data$samplem)))
     if(!is.null(n.steps)){
         stopifnot(length(n.steps) == 1 && is.numeric(n.steps))
     }
@@ -365,7 +367,7 @@ association <- function(data, nam.result, y,
     
     ## For association, batches needs to be a numeric vector
     if (is.null(batches)) {
-        X <- rep(1, data$N)
+        X <- rep(1, data$N) |> as.factor()
         # X <- Matrix::Matrix(rep(1, data$N), ncol = 1, sparse = TRUE)
     } else {
         X <- dplyr::pull(data$samplem, dplyr::one_of(batches)) |> 

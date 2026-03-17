@@ -1,4 +1,3 @@
-
 #' Perform a single diffusion mapping step.
 #' 
 #' @param a A sparseMatrix M by M adjacency matrix (connectivities) whose m,m'-th
@@ -18,73 +17,17 @@ diffuseStep <- function(a, s) {
     return(res) 
 }
 
-#' calculate kurtosis of the rows or columns of a sparseMatrix 
-#' 
-#' @name Kurtosis
-#' 
-#' @param x A sparseMatrix for which the row or column kurtosis should be calculated
-#' @param margin An integer specifying the margin over which to calculate kurtosis
-#' 1 for rows and 2 for columns.
-#' 
-#' @return the row- or column-wise kurtosis of x
-#' @keywords internal
-Kurtosis <- function(x, margin){
-    stopifnot(is.numeric(margin) && length(margin) == 1)
-    stopifnot(is.matrix(x) || isa(x, "Matrix"))
-    if(margin == 1){
-        mu <- Matrix::rowMeans(x)
-        m2 <- Matrix::rowMeans(x^2)
-        m3 <- Matrix::rowMeans(x^3)
-        m4 <- Matrix::rowMeans(x^4)
-    } else if(margin == 2){
-        mu <- Matrix::colMeans(x)
-        m2 <- Matrix::colMeans(x^2)
-        m3 <- Matrix::colMeans(x^3)
-        m4 <- Matrix::colMeans(x^4)
-    } else {
-        stop("'margin' only supports single dimension of a matrix (1 or 2).")
-    }
-    
-    # Expanded 4th central moment: E[(X-mu)^4]
-    central4 <- m4 - 4*mu*m3 + 6*mu^2*m2 - 3*mu^4
-    sigma4 <- (m2 - mu^2)^2
-    
-    kurt <- central4 / sigma4
-    return(kurt)
-}
-
-#' A prop.table alternative for sparseMatrices
-#' 
-#' @param x A sparseMatrix
-#' @param margin A vector giving the margins to split by. E.g., for a matrix 1 
-#' indicates rows, 2 indicates columns.
-#' 
-#' @note unlike [base::prop.table()] this function doesn't handle `marge = c(1,2)`
-#' 
-#' @returns A sparse proportion table for the given margin
-#' 
-#' @keywords internal
-propTable <- function(x, margin){
-    stopifnot(is.numeric(margin) && length(margin) == 1)
-    stopifnot(is.matrix(x) || isa(x, "Matrix"))
-    if(margin == 1){
-        res <- Matrix::t(Matrix::crossprod(x, Matrix::Diagonal(x = 1 /  Matrix::rowSums(x))))
-    } else if(margin == 2){
-        res <- x %*% Matrix::Diagonal(x = 1 /  Matrix::colSums(x)) 
-    } else {
-        stop("Only margins 1 or 2 are supported.")
-    }
-    return(res)
-}
-
 #' calculate kurtosis accounting for batch
 #' 
-#' @param NAM A NAM matrix as calculated by 
+#' @param NAM A NAM matrix as calculated by [buildNAM()]
 #' @param batch A factor containing batch information
 #' 
 #' @returns a vector of kurtosis values for each row (cell) in NAM
 #' @keywords internal
 batchKurtosis <- function(NAM, batch) {
+    stopifnot(is.factor(batch))
+    stopifnot(isa(NAM, "Matrix"))
+    
     bI <- Matrix::fac2sparse(batch)
     # mean batch NAM
     bNAM <- Matrix::t(bI %*% NAM) %*% Matrix::Diagonal(x = 1 / Matrix::rowSums(bI))
@@ -99,6 +42,7 @@ batchKurtosis <- function(NAM, batch) {
 #' @param min.threshold A numeric scalar defining the minimum value which the 
 #' threshold should take.\cr
 #' Default: 6
+#' @param verbose Logical. Controls verbosity.
 #' 
 #' @note min.threshold is 6 here, to keep functionality the same as initially 
 #' written, but there is no mention of this in the paper.
@@ -108,22 +52,150 @@ batchKurtosis <- function(NAM, batch) {
 #' @keywords internal
 qcNAM <- function(NAM, 
                   batch = NULL, 
-                  min.threshold = 6) {
+                  min.threshold = 6,
+                  verbose = FALSE) {
+    
     N <- nrow(NAM)
     ## NOTE: added NULL check 
     if (is.null(batch) || length(unique(batch)) == 1) {
-        message('Only one unique batch supplied to qc')
+        if(verbose) message('Only one unique batch supplied to qc')
         keep <- rep(TRUE, ncol(NAM))
         res <- list(NAM = NAM, keep = keep)
     } else {
+        medkurt <- Kurtosis(NAM, margin = 1) |> median()
         kurtoses <- batchKurtosis(NAM, batch)
+        # TODO: add batch level kurtosis message
+        # if(verbose) message("")
+        
+        if(verbose) message("Median batch kurtosis: ", round(median(kurtoses), 3))
         threshold <- max(min.threshold, 2*median(kurtoses))
-        message("Throwing out neighborhoods with batch kurtosis >= ", threshold)
+        if(verbose) message("Throwing out neighborhoods with batch kurtosis >= ", threshold)
         keep <- which(kurtoses < threshold)
-        message("keeping ", length(keep), " neighborhoods")   
+        if(verbose) message("keeping ", length(keep), " neighborhoods")
+        # if(verbose) message("Median batch kurtosis after filtering: ", 
+        #                     round(kurtoses, 3))
         res <- list(NAM = NAM[, keep, drop = FALSE], keep = keep)
     }
     return(res) 
+}
+
+#' Perform batch correction of a NAM with OLS regression
+#'
+#' @param NAM A neighborhood association matrix
+#' @param cov.mat a matrix of covariates. \cr
+#' Default: NULL
+#' @param batch a factor containing the batch to correct. \cr
+#' Default: NULL
+#'
+#' @returns A list containing the corrected NAM, the Hat matrix (M), and degrees 
+#' of freedom (r)
+#' 
+#' @keywords internal
+olsNAM <- function(NAM, 
+                   cov.mat = NULL, 
+                   batch = NULL){
+    if(!is.null(batch)){
+        B <- Matrix::sparse.model.matrix(~0+batch)
+    } 
+    if(!is.null(cov.mat)){
+        C <- Scale(as(cov.mat, "sparseMatrix"))
+        
+    }
+    X <- cbind(B, C)
+    dfs <- ncol(X)
+    N <- nrow(NAM)
+    I <- Matrix::Diagonal(n = N)
+    H <- X %*% Matrix::solve(Matrix::crossprod(X, X), Matrix::t(X))
+    M <- I - H
+    NAM_ <- M %*% NAM 
+    colnames(NAM_) <- colnames(NAM)
+    rownames(NAM_) <- rownames(NAM)
+    return(list(NAM_ = NAM_, 
+                M = M,
+                r = dfs))
+}
+
+#' Perform batch correction of a NAM using (partial) ridge regression
+#'
+#' @param NAM A neighborhood association matrix
+#' @param cov.mat a matrix of covariates. \cr
+#' Default: NULL
+#' @param batch a factor containing the batch to correct. \cr
+#' Default: NULL
+#' @param ridges A vector of ridges to try. \cr
+#' Default: NULL
+#' @param partial A character string or NULL. If NULL, ridge regression is performed
+#' on all variables. If a character, specify which set of variables ridge regression
+#' should be used on, the other set gets OLS fitting. Must be one of "batches" or
+#' "covariates". \cr 
+#' Default: NULL
+#'
+#' @returns A list containing the corrected NAM, the Hat matrix (M), and degrees 
+#' of freedom (r)
+#' 
+#' @keywords internal
+ridgeNAM <- function(NAM, 
+                     cov.mat = NULL, 
+                     batch = NULL, 
+                     ridges = NULL,
+                     partial = NULL){
+    if(!is.null(partial)){
+        partial <- match.arg(partial, c("batches", "covariates"))
+    }
+    if(!is.null(partial) && any(c(is.null(cov.mat), is.null(batch)))){
+        warning("'partial' is not null, but only 'cov.mat' or 'batch' supplied.",
+                " Using standard ridge regression.")
+    }
+    dfs <- 0
+    if(!is.null(batch) && !is.null(cov.mat)){
+        B <- Matrix::sparse.model.matrix(~0+batch)
+        C <- as(cov.mat, "sparseMatrix")
+        X <- Scale(cbind(B, C))
+        
+        if(is.null(partial)){ 
+            L <- Matrix::Diagonal(n = ncol(X))
+        } else if(partial == "batches"){ # only do ridge on batches, fit OLS to covariates
+            L <- Matrix::Diagonal(x = c(rep(1, ncol(B)), rep(0, ncol(X) - ncol(B))))
+            dfs <- ncol(C)
+        } else { # only do ridge on covariates, fit OLS to batches
+            L <- Matrix::Diagonal(x = c(rep(0, ncol(B)), rep(1, ncol(X) - ncol(B))))
+            dfs <- ncol(B)
+        }
+    } else if(!is.null(batch)){
+        X <- Matrix::sparse.model.matrix(~0+batch) |> Scale()
+        L <- Matrix::Diagonal(n = ncol(X))
+    } else if (!is.null(cov.mat)) {
+        X <- Scale(as(cov.mat, "sparseMatrix"))
+        L <- Matrix::Diagonal(n = ncol(X))
+    }
+    N <- nrow(NAM)
+    I <- Matrix::Diagonal(n = N)
+    if(is.null(ridges)){
+        sv_max <- svd(X)$d[1]^2
+        ridges <- sv_max * 10^seq(3, -3, length.out = 20)
+        # ridges <- c(10^seq(-5, 5, length.out = 20), sqrt(.Machine$double.eps))
+    } 
+    # find the best ridge penalty
+    gcv <- vapply(ridges, function(l) {
+        H <- X %*% Matrix::solve(Matrix::crossprod(X, X) + l * L, Matrix::t(X))
+        resids <- (I - H) %*% NAM
+        num <- (1/N) * sum(resids^2)
+        den <- ((1/N) * (1 - sum(Matrix::diag(H))))^2
+        num/den
+    }, numeric(1)) |> round(3)
+    
+    lambda <- ridges[which.min(gcv)]
+    H <- X %*% Matrix::solve(Matrix::crossprod(X, X) + lambda * L, Matrix::t(X))
+    M <- I - H
+    NAM_ <- M %*% NAM
+    colnames(NAM_) <- colnames(NAM)
+    rownames(NAM_) <- rownames(NAM)
+    kurtoses <- batchKurtosis(NAM_, batch) |> median()
+    message("with ridge ", lambda, " median batch kurtosis = ", kurtoses)
+    dfs <- dfs + sum(Matrix::diag(H))
+    return(list(NAM_ = NAM_, 
+                M = M,
+                r = dfs))
 }
 
 #' remove batch effects (including continuous covariates)
@@ -133,12 +205,17 @@ qcNAM <- function(NAM,
 #' Default NULL
 #' @param batch A factor containing batch information.\cr
 #' Default NULL
+#' @param method A character string specifying what method to use for batch
+#' and covariate correction. Options are: c("ridge", "ols"), Setting to "ridge"
+#' will reproduce original behavior.
+#' @param partial.by A character string. One of NULL, "batches", or "covariates". If 
+#' `method == "ridge"` then ridge penalties are only applied to those variables.
+#' If null then all variables are penalized. Setting to "batches" will reproduce
+#' original behavior.\cr
+#' Default: NULL
 #' @param ridges A numeric vector of ridge penalties to try. If NULL, a default
 #' set of ridges is used `c(1e5, 1e4, 1e3, 1e2, 1e1, 1e0, 1e-1, 1e-2, 1e-3, 1e-4, 0)`.\cr
 #' Default NULL
-#' @param threshold A numeric indicating median batch kurtosis below which to stop
-#' updating ridges. \cr
-#' Default: 6
 #' @note assumes that covariates are not categorical
 #' @note the scale function in R gives slightly different results than does 
 #' similar function in python 
@@ -150,48 +227,33 @@ qcNAM <- function(NAM,
 residNAM <- function(NAM, 
                      covs.mat = NULL, 
                      batch = NULL, 
-                     ridges = NULL,
-                     threshold = 6) {
-    N <- nrow(NAM)
-    NAM_ <- scale(NAM, center = TRUE, scale = FALSE)
+                     method = c("ols", "ridge"),
+                     partial.by = c("batches", "covariates"),
+                     ridges = NULL, 
+                     verbose = FALSE) {
+    method <- match.arg(method, choices = c("ols", "ridge"))
     
-    r <- 0
-    I <- Matrix::Diagonal(n = N)
-    # TODO: Handle multiple batch variables.
-    if(!is.null(batch) && length(unique(batch)) != 1) {
-        X <- model.matrix(~0+batch)
-        r <- r + ncol(X)
-        M <- I - X %*% solve(crossprod(X, X), Matrix::t(X))
-        NAM_ <- M %*% NAM_ 
-    } 
-    if(!is.null(covs.mat)) {
-        X <- scale(covs.mat)
-        if(is.null(ridges)) {
-            # TODO: test that this is a viable solution. 
-            sv_max <- svd(X)$d[1]^2
-            ridges <- c(sv_max * 10^seq(3, -3, length.out = 20), 0)
-            # ridges <- c(1e5, 1e4, 1e3, 1e2, 1e1, 1e0, 1e-1, 1e-2, 1e-3, 1e-4, 0)            
-        } 
-        
-        for(lambda in ridges) {
-            L <- Matrix::Diagonal(n = ncol(covs.mat))
-            H <- X %*% solve(crossprod(X, X) + lambda * L, Matrix::t(X))
-            M <- I - H
-            NAM_tmp <- M %*% NAM_
-            kurtoses <- batchKurtosis(NAM_tmp, batch)
-            message("with ridge ", lambda, " median batch kurtosis = ", median(kurtoses))
-            if(median(kurtoses) <= threshold) {
-                r <- r + sum(diag(H))
-                NAM_ <- NAM_tmp
-                break  
+    NAM_ <- Scale(NAM, center = TRUE, scale = FALSE)
+    if(!is.null(batch) || !is.null(covs.mat)){
+        if(method == "ols"){
+            NAMres <- olsNAM(NAM_, covs.mat, batch)
+        } else {
+            if(!is.null(partial.by) && (!is.null(batch) && !is.null(covs.mat))){
+                partial.by <- match.arg(partial.by, choices = c("batches", "covariates"))
+            } else {
+                partial.by <- NULL
             }
+            NAMres <- ridgeNAM(NAM_, covs.mat, batch, ridges, partial = partial.by)
         }
+    } else {
+        # pass through to generate proper results list. 
+        I <- Matrix::Diagonal(n = nrow(NAM))
+        NAMres <- list(NAM_ = NAM, 
+                       M = I,
+                       r = 0)
     }
-    NAM_ <- scale(NAM_, center = FALSE, scale = TRUE)
-    res <- list(NAM_ = NAM_, 
-                M = M,
-                r = r) 
-    return(res)
+    NAMres$NAM_ <- Scale(NAMres$NAM_, center = FALSE, scale = TRUE)
+    return(NAMres)
 }
 
 #' Compute the singular-value decomposition of a NAM matrix.
@@ -270,10 +332,12 @@ buildNAM <- function(data,
     for (i in seq_len(max.steps)) {
         s <- diffuseStep(data$connectivities, s)
         medkurt <- median(Kurtosis(propTable(s, margin = 2), margin = 1))
-        # if n.steps is null then take at least 3 steps
+        # if(verbose) message("Median kurtosis: ", round(medkurt, 3))
+        # if n.steps is null then take at least min.steps steps
         if (is.null(n.steps)) {
             kd <- prevmedkurt - medkurt
-            if(verbose) message("Kurtosis change: ", kd, " at step ", i)
+            if(verbose) message("Median kurtosis = ", round(medkurt, 3), 
+                                " Kurtosis change = ", round(kd, 3), " at step ", i)
             if (kd < kurt.delta & i > min.steps) {
                 message("stopping after ", i, " steps")
                 break 
@@ -283,8 +347,10 @@ buildNAM <- function(data,
             break
         }
     }  
-    
-    snorm <- Matrix::t(propTable(s, margin = 2))
+    sfin <- propTable(s, margin = 2)
+    medkurt <- median(Kurtosis(sfin, margin = 1))
+    if(verbose) message("Final kurtosis: ", round(medkurt, 3))
+    snorm <- Matrix::t(sfin)
     rownames(snorm) <- data$samplem[[data$samplem_key]]
     colnames(snorm) <- data$obs[[data$obs_key]]
     return(snorm)
@@ -310,23 +376,35 @@ buildNAM <- function(data,
 #' @param n.steps Numeric scalar controlling the number of steps to take during 
 #' the random walk.\cr
 #' Default: NULL
-#' @param min.steps = .\cr
+#' @param min.steps Numeric scalar. Minimum number of steps to take on the random
+#' walk.\cr
 #' Default: 3L
-#' @param max.steps = .\cr
+#' @param max.steps Numeric scalar. Maximum number of steps to take on the random
+#' walk.\cr
 #' Default: 15L
-#' @param kurtosis.delta = .\cr
+#' @param kurtosis.delta Numeric scalar. Minimum kurtosis change below which the
+#' random walk can stop (after travelling at least `min.steps`).\cr
 #' Default: 3
-#' @param min.batch.kurtosis = .\cr
+#' @param min.batch.kurtosis Sets the minimum threshold below which cells are kept
+#' during QC. This ensures that when kurtosis is not extreme between batches
+#' then cells are not filtered. `threshold <- max(min.batch.kurtosis, 2*median(kurtoses))`.\cr
 #' Default: 6
 #' @param max.frac.pcs The number of PCs to calculate for SVD. The minimum is 10 
 #' and the maximum is the number of samples minus 1. \cr
 #' Default: 0.15
-#' @param ridges .\cr
+#' @param method A character string specifying what method to use for batch
+#' and covariate correction. Options are: c("ridge", "ols"), Setting to "ridge"
+#' will reproduce original behavior.
+#' @param partial.by A character string. One of NULL, "batches", or "covariates". If 
+#' `method == "ridge"` then ridge penalties are only applied to those variables.
+#' If null then all variables are penalized. Setting to "batches" will reproduce
+#' original behavior.\cr
 #' Default: NULL
-#' @param ridge.kurt.threshold .\cr
+#' @param ridges A numeric vector of ridges to try during ridge regression. When
+#' NULL ridges are calculated automatically. \cr
 #' Default: NULL
 #' @param suffix A character scalar for optionally adding a suffix to the output
-#' components for unknown reasons. \cr
+#' components. \cr
 #' Default: ""
 #' @param verbose Logical scalar controlling verbosity. \cr
 #' Default: FALSE
@@ -348,8 +426,9 @@ nam <- function(data, y,
                 min.batch.kurtosis = 6,
                 max.frac.pcs = 0.15, 
                 # passed to residNAM
+                method = c("ridge", "ols"),
+                partial.by = NULL,
                 ridges = NULL,
-                ridge.kurt.threshold = 6,
                 # general
                 suffix = '',
                 filter.samples = NULL,
@@ -365,7 +444,7 @@ nam <- function(data, y,
     res <- list()
     ## TODO: Filtering should happen at top level, either during data object
     ##       build or as a helper to manipulate existing data object
-
+    
     # TODO: it would be cleaner overall if nam accepted either a character string
     #       for top level use, or a model.matrix for internal use by association
     if (is.null(batches)) {
@@ -397,8 +476,10 @@ nam <- function(data, y,
                     kurt.delta = kurtosis.delta, 
                     verbose = verbose)
     if (verbose) message('QC-ing NAM')
-    res_qc_nam <- qcNAM(NAM, batch = batch_vec, min.threshold = min.batch.kurtosis) 
-    
+    res_qc_nam <- qcNAM(NAM, 
+                        batch = batch_vec, 
+                        min.threshold = min.batch.kurtosis, 
+                        verbose = verbose) 
     # y is returned in order to avoid recalculating NAM if not desired.
     # TODO: handle multiple y?
     y <- data$samplem[, y, drop = TRUE]
@@ -407,34 +488,45 @@ nam <- function(data, y,
     } else {
         y <- as.numeric(y)
     }
-    res[['y']] <- y
-    res[[paste0('NAM.T', suffix)]] <- Matrix::t(res_qc_nam[[1]])
-    res[[paste0('keptcells', suffix)]] <- res_qc_nam[[2]]
-    res[[paste0('_batches', suffix)]] <- batch_vec
+    
     
     ## (3) Decompose NAM 
     ## TODO: check if double brackets appropriate for multiple covs and/or batches
     ## TODO: check with Y&L if covs should be numerical and batches categorical
     ## NOTE: don't really need a separate SVD function, since it can be done in one line
     if (verbose) message('Residualizing NAM')
-    res_resid_nam <- residNAM(NAM, covs.mat = cov_mat, 
+    res_resid_nam <- residNAM(res_qc_nam$NAM, 
+                              covs.mat = cov_mat, 
                               batch = batch_vec, 
+                              method = method,
+                              partial.by = partial.by,
                               ridges = ridges,
-                              threshold = ridge.kurt.threshold)
-    res[[paste0('_M', suffix)]] <- res_resid_nam$M
-    res[[paste0('_r', suffix)]] <- res_resid_nam$r
-    
+                              verbose = verbose)
     if (verbose) message('Decomposing NAM')
     n_pcs <- max(10, ceiling(max.frac.pcs * nrow(data$samplem)))
     n_pcs <- min(n_pcs, nrow(data$samplem) - 1) ## make sure you don't compute all SVs    
     res_svd_nam <- svdNAM(res_resid_nam$NAM_, n.pcs = n_pcs)
-    res[[paste0('NAM_sampleXpc', suffix)]] <- res_svd_nam$U
-    res[[paste0('NAM_svs', suffix)]] <- res_svd_nam$svs
-    res[[paste0('NAM_varexp', suffix)]] <- res_svd_nam$svs / nrow(res_svd_nam$U) / nrow(res_svd_nam$V)
-    res[[paste0('NAM_nbhdXpc', suffix)]] <- res_svd_nam$V
     
-    ## TODO: save covs for later
-    #     du['_covs'+suffix] = (np.zeros(0) if covs is None else covs)  
-    #     res[[paste0('_covs', suffix)]]
+    res[['y']] <- y
+    res[['raw.NAM.T']] <- Matrix::t(NAM)
+    res[['qc.NAM.T']] <- Matrix::t(res_qc_nam$NAM)
+    res[['resid.NAM.T']] <- Matrix::t(res_resid_nam$NAM_)
+    res[['_M']] <- res_resid_nam$M
+    # TODO rename to df (degrees of freedom)
+    res[['_r']] <- res_resid_nam$r
+    res[['NAM_sampleXpc']] <- res_svd_nam$U
+    res[['NAM_svs']] <- res_svd_nam$svs
+    res[['NAM_varexp']] <- res_svd_nam$svs / nrow(res_svd_nam$U) / nrow(res_svd_nam$V)
+    res[['NAM_nbhdXpc']] <- res_svd_nam$V
+    res[['keptcells']] <- res_qc_nam[[2]]
+    res[['_batches']] <- batch_vec
+    if(!is.null(covs)){
+        res[['covariates']] <- cov_mat
+    } else {
+        res[['covariates']] <- NA_real_
+    }
+    
+    names(res) <- paste0(names(res), suffix)
+    
     return(res)
 }

@@ -1,0 +1,79 @@
+#' calculate kurtosis of the rows or columns of a sparseMatrix 
+#' 
+#' @name Kurtosis
+#' 
+#' @param x A sparseMatrix for which the row or column kurtosis should be calculated
+#' @param margin An integer specifying the margin over which to calculate kurtosis
+#' 1 for rows and 2 for columns.
+#' 
+#' @return the row- or column-wise kurtosis of x
+#' @keywords internal
+Kurtosis <- function(x, margin){
+    stopifnot(is.numeric(margin) && length(margin) == 1)
+    stopifnot(is.matrix(x) || isa(x, "Matrix"))
+    if(margin == 1){
+        mu <- Matrix::rowMeans(x)
+        m2 <- Matrix::rowMeans(x^2)
+        m3 <- Matrix::rowMeans(x^3)
+        m4 <- Matrix::rowMeans(x^4)
+    } else if(margin == 2){
+        mu <- Matrix::colMeans(x)
+        m2 <- Matrix::colMeans(x^2)
+        m3 <- Matrix::colMeans(x^3)
+        m4 <- Matrix::colMeans(x^4)
+    } else {
+        stop("'margin' only supports single dimension of a matrix (1 or 2).")
+    }
+    
+    # Expanded 4th central moment: E[(X-mu)^4]
+    central4 <- m4 - 4*mu*m3 + 6*mu^2*m2 - 3*mu^4
+    sigma4 <- (m2 - mu^2)^2
+    
+    kurt <- central4 / sigma4
+    return(kurt)
+}
+
+#' A prop.table alternative for sparseMatrices
+#' 
+#' @param x A sparseMatrix
+#' @param margin A vector giving the margins to split by. E.g., for a matrix 1 
+#' indicates rows, 2 indicates columns.
+#' 
+#' @note unlike [base::prop.table()] this function doesn't handle `marge = c(1,2)`
+#' 
+#' @returns A sparse proportion table for the given margin
+#' 
+#' @keywords internal
+propTable <- function(x, margin){
+    stopifnot(is.numeric(margin) && length(margin) == 1)
+    stopifnot(is.matrix(x) || isa(x, "Matrix"))
+    if(margin == 1){
+        res <- Matrix::t(Matrix::crossprod(x, Matrix::Diagonal(x = 1 /  Matrix::rowSums(x))))
+    } else if(margin == 2){
+        res <- x %*% Matrix::Diagonal(x = 1 /  Matrix::colSums(x)) 
+    } else {
+        stop("Only margins 1 or 2 are supported.")
+    }
+    return(res)
+}
+
+#' A scale function for sparseMatrix 
+#' 
+#' @param x A sparseMatrix
+#' @param center A boolean, should x be centered
+#' @param scale A boolean, should x be scaled
+#' 
+#' @returns a sparseMatrix ("dgeMatrix")
+#'
+#' @keywords internal
+Scale <- function(x, center = TRUE, scale = TRUE){
+    if(center){
+        centers <- Matrix::colMeans(x)
+        x <- Matrix::t(Matrix::t(x) - centers)
+    }
+    if(scale){
+        scales <- sqrt(Matrix::colSums(x^2) / (nrow(x) - 1))
+        x <- Matrix::t(Matrix::t(x) / scales)
+    }
+    return(x)
+}
