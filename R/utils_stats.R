@@ -1,14 +1,17 @@
 #' Permute Y conditioned on B
 #' 
-#' @param B a numeric batch vector
-#' @param Y the variable of interest, scaled
-#' @param num Number of permutations to perform
-#' @param duplicates.ok .\cr
-#' Default: NULL
-#' @param seed .\cr
-#' Default: NULL
-#' @returns A matrix of permutations of Y conditioned on B
+#' @param B A factor (or object coercible via \code{split()}) of length n
+#' indicating batch membership. Permutations are performed within each level.
+#' @param Y A numeric vector of length n. The variable to permute.
+#' @param num Positive integer. Number of permutations to generate.
+#' @param seed An integer random seed for reproducibility.
+#' @param duplicates.ok Logical. If FALSE, duplicate permutation rows are
+#' removed from the output, which may result in fewer than `num` columns.\cr
+#' Default: TRUE.
 #' 
+#' @returns A numeric matrix of dimensions n × m, where `m <= num`. 
+#' Each column is one permutation of `Y` within batch levels.
+#'   
 #' @keywords internal
 conditional_permutation <- function(B, Y, num, seed, duplicates.ok = TRUE) {
     # TODO: for certain combinations of length(Y) and B it is better to compute
@@ -37,8 +40,9 @@ conditional_permutation <- function(B, Y, num, seed, duplicates.ok = TRUE) {
 #' @param breaks A vector of thresholds 
 #' @param z A matrix of correlations 
 #' 
-#' @returns a vector of length `ncol(z)` containing the the number of neighborhoods 
-#' exceeding each break (threshold)
+#' @returns A numeric matrix of dimensions (\code{length(breaks) - 1} x \code{ncol(z)}), 
+#' where entry [i, j] is the number of rows in column j of \code{z} whose squared 
+#' value exceeds \code{breaks[i]^2}.
 #' 
 #' @keywords internal
 tail_counts <- function(breaks, z) {
@@ -58,12 +62,16 @@ tail_counts <- function(breaks, z) {
 #'
 #' @param z A correlation matrix with a single column containing the observed 
 #' correlations
-#' @param znull A correlation matrix with n-permutations columns containing the 
+#' @param znull A correlation matrix with p-permutations columns containing the 
 #' permuted null correlations
 #' @param threshold a vector of bins for the distribution
 #' 
-#' @returns A data.frame containing thresholds, FDRs, and number of neighborhoods in each
-#' threshold bin.
+#' @note The raw per-permutation FDP estimates are averaged across permutations
+#' to obtain the FDR, which is then monotonised via `cummin()` to ensure
+#' that the FDR curve is non-increasing as the threshold increases.
+#' 
+#' @returns A data.frame containing thresholds, FDRs, and number of neighborhoods 
+#' in each threshold bin.
 #' 
 #' @keywords internal
 empirical_fdrs <- function(z, znull, thresholds) {    

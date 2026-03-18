@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils_SCE.R
 \name{association.SingleCellExperiment}
 \alias{association.SingleCellExperiment}
-\title{Extract information from Seurat object to create CNA object}
+\title{Perform CNA on and assign the results to the input SingleCellExperiment object.}
 \usage{
 association.SingleCellExperiment(
   sce,
@@ -16,14 +16,14 @@ association.SingleCellExperiment(
 )
 }
 \arguments{
-\item{sce}{Initialized SingleCellExperiment object.}
+\item{sce}{A SingleCellExperiment object.}
 
 \item{test_var}{Variable to test for association.}
 
 \item{sample_key}{String denoting the name of the sample-level identifier (e.g. DonorID).}
 
 \item{graph}{A KNN graph in sparseMatrix format or the name of such a graph
-stored in `colPairs(sce)`.}
+stored in `colPair(sce)`.}
 
 \item{batches}{A character string. Name of batch variable. Currently only one 
 categorical variable allowed.}
@@ -36,8 +36,11 @@ to control for.}
 \item{...}{Passed to [association()]}
 }
 \value{
-A seurat object
+A SingleCellExperiment object with NAM embeddings stored in 
+`reducedDim(sce, "CNA")`, results stored in `metadata(sce)$CNA`, and correlation
+values stored in `colData(sce)` as `cna_ncorrs`, `cna_ncorrs_fdr05`, and 
+`cna_ncorrs_fdr10`
 }
 \description{
-Extract information from Seurat object to create CNA object
+Perform CNA on and assign the results to the input SingleCellExperiment object.
 }

@@ -1,26 +1,28 @@
-#' calculate kurtosis of the rows or columns of a sparseMatrix 
-#' 
-#' @name Kurtosis
+#' Calculate kurtosis of the rows or columns of a sparseMatrix 
 #' 
 #' @param x A sparseMatrix for which the row or column kurtosis should be calculated
 #' @param margin An integer specifying the margin over which to calculate kurtosis
-#' 1 for rows and 2 for columns.
+#' 1 for rows and 2 for columns.\cr
+#' Default: 2L
+#' @param na.rm A logical controlling whether NAs should be removed from the calculation.\cr
+#' Default: FALSE
 #' 
 #' @return the row- or column-wise kurtosis of x
+#' 
 #' @keywords internal
-Kurtosis <- function(x, margin){
+Kurtosis <- function(x, margin = 2L, na.rm = FALSE){
     stopifnot(is.numeric(margin) && length(margin) == 1)
     stopifnot(is.matrix(x) || isa(x, "Matrix"))
     if(margin == 1){
-        mu <- Matrix::rowMeans(x)
-        m2 <- Matrix::rowMeans(x^2)
-        m3 <- Matrix::rowMeans(x^3)
-        m4 <- Matrix::rowMeans(x^4)
+        mu <- Matrix::rowMeans(x, na.rm = na.rm)
+        m2 <- Matrix::rowMeans(x^2, na.rm = na.rm)
+        m3 <- Matrix::rowMeans(x^3, na.rm = na.rm)
+        m4 <- Matrix::rowMeans(x^4, na.rm = na.rm)
     } else if(margin == 2){
-        mu <- Matrix::colMeans(x)
-        m2 <- Matrix::colMeans(x^2)
-        m3 <- Matrix::colMeans(x^3)
-        m4 <- Matrix::colMeans(x^4)
+        mu <- Matrix::colMeans(x, na.rm = na.rm)
+        m2 <- Matrix::colMeans(x^2, na.rm = na.rm)
+        m3 <- Matrix::colMeans(x^3, na.rm = na.rm)
+        m4 <- Matrix::colMeans(x^4, na.rm = na.rm)
     } else {
         stop("'margin' only supports single dimension of a matrix (1 or 2).")
     }
@@ -37,11 +39,12 @@ Kurtosis <- function(x, margin){
 #' 
 #' @param x A sparseMatrix
 #' @param margin A vector giving the margins to split by. E.g., for a matrix 1 
-#' indicates rows, 2 indicates columns.
+#' indicates rows, 2 indicates columns. 
 #' 
-#' @note unlike [base::prop.table()] this function doesn't handle `marge = c(1,2)`
+#' @note Unlike [base::prop.table()], joint normalization (`margin = c(1, 2)`)
+#' is not supported. Rows or columns that sum to zero will produce `NaN`.
 #' 
-#' @returns A sparse proportion table for the given margin
+#' @returns A proportion table for x over the given margin in sparseMatrix format.
 #' 
 #' @keywords internal
 propTable <- function(x, margin){
@@ -63,7 +66,7 @@ propTable <- function(x, margin){
 #' @param center A boolean, should x be centered
 #' @param scale A boolean, should x be scaled
 #' 
-#' @returns a sparseMatrix ("dgeMatrix")
+#' @returns A dense sparseMatrix ("dgeMatrix")
 #'
 #' @keywords internal
 Scale <- function(x, center = TRUE, scale = TRUE){

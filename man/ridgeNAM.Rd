@@ -7,7 +7,8 @@
 ridgeNAM(NAM, cov.mat = NULL, batch = NULL, ridges = NULL, partial = NULL)
 }
 \arguments{
-\item{NAM}{A neighborhood association matrix}
+\item{NAM}{An M x N (Cells x Samples) neighborhood association matrix as 
+calculated by [buildNAM()]}
 
 \item{cov.mat}{a matrix of covariates. \cr
 Default: NULL}
@@ -15,18 +16,19 @@ Default: NULL}
 \item{batch}{a factor containing the batch to correct. \cr
 Default: NULL}
 
-\item{ridges}{A vector of ridges to try. \cr
+\item{ridges}{A vector of ridges to try or NULL. If NULL ridges are calculated
+automatically centered on `svd(X)$d[1]^2`. \cr
 Default: NULL}
 
 \item{partial}{A character string or NULL. If NULL, ridge regression is performed
 on all variables. If a character, specify which set of variables ridge regression
-should be used on, the other set gets OLS fitting. Must be one of "batches" or
+should be used on, the other set does not get penalized. Must be one of "batches" or
 "covariates". \cr 
 Default: NULL}
 }
 \value{
-A list containing the corrected NAM, the Hat matrix (M), and degrees 
-of freedom (r)
+A list containing the corrected NAM, the Hat matrix (M), and the 
+effective degree of freedom (`sum(diag(H))` from the ridge hat matrix) (r)
 }
 \description{
 Perform batch correction of a NAM using (partial) ridge regression

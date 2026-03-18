@@ -13,12 +13,13 @@ propTable(x, margin)
 indicates rows, 2 indicates columns.}
 }
 \value{
-A sparse proportion table for the given margin
+A proportion table for x over the given margin in sparseMatrix format.
 }
 \description{
 A prop.table alternative for sparseMatrices
 }
 \note{
-unlike [base::prop.table()] this function doesn't handle `marge = c(1,2)`
+Unlike [base::prop.table()], joint normalization (`margin = c(1, 2)`)
+is not supported. Rows or columns that sum to zero will produce `NaN`.
 }
 \keyword{internal}

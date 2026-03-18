@@ -7,19 +7,20 @@
 createObject.SingleCellExperiment(sce, sample_key, sample_vars, graph)
 }
 \arguments{
-\item{sce}{Initialized Seurat object. Assumes that FindNeighborhoods has been run.}
+\item{sce}{A SingleCellExperiment object.}
 
-\item{sample_key}{Character string denoting the name of the sample-level identifier (e.g. DonorID).}
+\item{sample_key}{A character string denoting the name of the sample-level 
+identifier (e.g. DonorID).}
 
-\item{sample_vars}{Character string or vector specifying Which columns of 
+\item{sample_vars}{A character string or vector specifying which columns of 
 `colData(sce)` should be included. This should include any columns for batch
 and covariates.}
 
-\item{graph}{A KNN graph in sparseMatrix format or the name of such a graph
-stored in `colPairs(sce)`.}
+\item{graph}{A KNN graph in sparseMatrix format, or the name of such a graph
+stored in `colPair(sce)`.}
 }
 \value{
-an rnca data object (list)
+An `rnca` data object (list)
 }
 \description{
 Extract information from SingleCellExperiment object to create CNA object

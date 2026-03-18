@@ -2,20 +2,24 @@
 % Please edit documentation in R/utils_sm.R
 \name{Kurtosis}
 \alias{Kurtosis}
-\title{calculate kurtosis of the rows or columns of a sparseMatrix}
+\title{Calculate kurtosis of the rows or columns of a sparseMatrix}
 \usage{
-Kurtosis(x, margin)
+Kurtosis(x, margin = 2L, na.rm = FALSE)
 }
 \arguments{
 \item{x}{A sparseMatrix for which the row or column kurtosis should be calculated}
 
 \item{margin}{An integer specifying the margin over which to calculate kurtosis
-1 for rows and 2 for columns.}
+1 for rows and 2 for columns.\cr
+Default: 2L}
+
+\item{na.rm}{A logical controlling whether NAs should be removed from the calculation.\cr
+Default: FALSE}
 }
 \value{
 the row- or column-wise kurtosis of x
 }
 \description{
-calculate kurtosis of the rows or columns of a sparseMatrix
+Calculate kurtosis of the rows or columns of a sparseMatrix
 }
 \keyword{internal}

@@ -1,8 +1,9 @@
 #' Fit y to the data
 #' 
-#' @param q A vector of values to fit (a la y)
-#' @param k Number of components of U to fit
-#' @param U the left singular vector matrix of SVD
+#' @param q A vector of values to fit. A column-scaled numeric vector of length n (samples)
+#' @param k Number of components of U to fit, `1 <= k <= ncol(U)`.
+#' @param U the left singular vector matrix of SVD (samples × PCs).
+#' 
 #' @returns a list containing fitted values (qhat) and regression coefficients (beta) 
 #'
 #' @keywords internal
@@ -17,11 +18,12 @@ regress <- function(q, k, U) {
 
 #' Calculate the F-test p-value
 #' 
-#' @param yhat y fit to the data
-#' @param ycond y corrected for batch and covariates
-#' @param k Number of components of U to test
-#' @param n number of samples
-#' @param r degrees of freedom
+#' @param yhat y fit to the data. Must be a numeric vectors of length n.
+#' @param ycond y corrected for batch and covariates. Must be a numeric vectors 
+#' of length n.
+#' @param k Number of components of U to test.
+#' @param n The number of samples.
+#' @param r degrees of freedom consumed by batch correction in [residNAM()].
 #' @param log.p A logical whether the log transformed p-value value should be 
 #' calculated.\cr
 #' Default: FALSE
@@ -48,12 +50,13 @@ calcStats <- function(yhat, ycond, k, n, r, log.p = FALSE) {
 
 #' Calculate the p-value for all ks and return the minimum
 #' 
-#' @param M the annihilator matrix (M returned by [residNAM])
-#' @param y A vector containing the variable of interest
+#' @param M The annihilator matrix (M returned by [residNAM])
+#' @param y A scaled numeric vector containing the variable of interest
 #' @param ks A vector of ks to test.
 #' @param U a matrix whose columns contain the left singular vectors of x 
 #' (U returned by [svdNAM])
-#' @param r the degrees of freedom (r returned by [residNAM])
+#' @param r the degrees of freedom already consumed by batch correction 
+#' (r returned by [residNAM])
 #' @param use.logp A logical whether the log transformed p-value value should be 
 #' calculated.\cr
 #' Default: FALSE
@@ -67,7 +70,8 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
     zcond <- M %*% y
     zcond <- scale(zcond, center = FALSE, scale = TRUE)
     qhats <- lapply(ks, function(k) regress(zcond, k, U)$qhat)
-    .tmp <- lapply(seq_along(ks), function(i) calcStats(qhats[[i]], zcond, ks[i], n, r, log.p = use.logp))
+    .tmp <- lapply(seq_along(ks), function(i) calcStats(qhats[[i]], zcond, ks[i], 
+                                                        n, r, log.p = use.logp))
     ps <- vapply(.tmp, \(x) x$p, numeric(1))
     r2s <- vapply(.tmp, \(x) x$r2, numeric(1))
     k_ <- which.min(ps)
@@ -91,6 +95,12 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #' @param force_permute_all A logical controlling whether permutations of `y` 
 #' should preserve batch information. \cr
 #' Default: FALSE 
+#' @param allow_duplicate_perms Logical. If `FALSE`, duplicate permutations
+#' of `y` are removed from the null distribution. Useful for small n where
+#' the number of distinct permutations is limited. Default is set to `TRUE` to
+#' reproduce original behavior, but should probably be set to `FALSE` for numerical
+#' accuracy. \cr
+#' Default: TRUE.
 #' @param local_test A logical, whether or not to perform local test of neighborhood
 #' correlations. \cr
 #' Default: TRUE
@@ -110,7 +120,7 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #'     criterion.}
 #'   \item{ncorrs}{Matrix of neighborhood-level association scores, rows
 #'     corresponding to neighborhoods.}
-#'   \item{fdrs}{Data frame of FDR results from \code{\link{empirical_fdrs}},
+#'   \item{fdrs}{Data frame of FDR results from [empirical_fdrs()],
 #'     or \code{NULL} if \code{local_test = FALSE}. Columns: \code{threshold},
 #'     \code{fdr}, \code{num_detected}.}
 #'   \item{fdr_5p_t}{Numeric scalar. Minimum threshold achieving FDR < 5\%,
@@ -261,12 +271,36 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #' Main function to perform CNA association analysis
 #' 
 #' @param data a list containing: 
-#' samplem = (sample-level metadata), 
-#' obs = (cell-level metadata), 
-#' connectivities  = (sparse symmetric weighted adjacency matrix),
-#' samplem_key = (character string indicating the column in samplem uniquely identifying samples),
-#' obs_key = (character string indicating the column in obs uniquely identifying cells),
-#' N = nrow(samplem_df).
+#' \describe{
+#'   \item{samplem}{
+#'      A data.frame containing sample-level metadata. Must have a single row 
+#'      for each sample in the data.
+#'   }
+#'   \item{obs}{
+#'      A data.frame containing cell-level metadata. Must have a single row for
+#'      each cell in the data. Must have at least 2 columns, one for cell id and
+#'      one for sample id. 
+#'   }
+#'   \item{connectivities}{
+#'      A symmetric weighted adjacency sparseMatrix. Likely generated during UMAP 
+#'      calculation.
+#'   }
+#'   \item{samplem_key}{
+#'      A character string indicating the column in `samplem` uniquely identifying 
+#'      samples.
+#'   }
+#'   \item{obs_key}{
+#'      A character string indicating the column in obs uniquely identifying cells.
+#'   }
+#'   \item{N}{
+#'      A numeric scalar indicating the number of samples i.e. nrow(samplem).
+#'   }
+#' }
+#' @param nam.result Optional. A pre-computed result list from [nam()]. If
+#' supplied, the NAM construction step is skipped and \code{data} is only used
+#' to build the batch factor \code{X} for permutation. If both \code{data} and
+#' \code{nam.result} are supplied, \code{nam.result} is used with a warning.
+#' Default: missing (i.e. \code{data} is used instead).
 #' @param y A character string specifying the column in `samplem` containing
 #' the variable of interest.
 #' @param batches A character string specifying the column in `samplem` 
@@ -278,7 +312,8 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #' @param n.steps Number of steps to take during the random walk. If specified then
 #' exactly this many steps is taken on the random walk. \cr
 #' Default: NULL
-#' @param suffix A character string to be appended for unknown reasons.\cr
+#' @param suffix A character string to be appended to the results. Useful
+#'  when running multiple [association()] calls on the same data.\cr
 #' Default: ''
 #' @param return.nam Logical controlling whether or not to return the NAM. \cr
 #' Default: FALSE
@@ -287,18 +322,27 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #' `seq(n/50, n/5, length.out = 4)` are checked. If a numeric scalar then 1:Ks are
 #' checked. If a numeric vector, then all supplied values are checked. \cr
 #' Default: NULL
-#' @param N.nulls .\cr
+#' @param N.nulls A positive integer. Number of null permutations used to
+#' construct the empirical null distribution for the global association test.\cr
 #' Default: 1000
-#' @param force.permute.all .\cr
-#' Default: FALSE
-#' @param allow.duplicate.perms .\cr
-#' Default: TRUE
-#' @param local.test .\cr
-#' Default: TRUE
+#' @param force.permute.all A logical controlling whether permutations of `y` 
+#' should preserve batch information. \cr
+#' Default: FALSE 
+#' @param allow.duplicate.perms Logical. If FALSE, duplicate permutations
+#' of `y` are removed from the null distribution. Useful for small n where
+#' the number of distinct permutations is limited. Default is set to TRUE to
+#' reproduce original behavior, but should probably be set to FALSE for numerical
+#' accuracy. \cr
+#' Default: TRUE.
+#' @param local.test Logical. If TRUE, neighbourhood-level association
+#' scores and empirical FDRs are computed in addition to the global test.\cr
+#' Default: TRUE.
 #' @param use.logp A logical whether the log transformed p-value value should be 
 #' calculated. Set to TRUE if your FDRs are incredibly small or 0. \cr
 #' Default: FALSE
-#' @param seed .\cr
+#' @param seed An integer seed for the permutation RNG, or NULL for a
+#' randomly selected seed. In either case, the seed is returned in the result to 
+#' allow reproducible results if needed.\cr
 #' Default: NULL
 #' @param verbose Logical controlling the verbosity of the function.\cr
 #' Default: FALSE
@@ -330,10 +374,10 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #'   \item{nullr2_std}{Standard deviation of R-squared across null permutations.}
 #'   \item{seed}{The integer seed used for permutations, for reproducibility.}
 #'   \item{NAM_embeddings}{The Neighborhood x PCs matrix (The Left singular vectors 
-#'   returned by [scd()]). If \code{return.nam = TRUE}}
+#'   returned by [svd()]). If \code{return.nam = TRUE}}
 #'   \item{NAM_loadings}{The Sample x PCs matrix (The Right singular vectors 
-#'   returned by [scd()]). If \code{return.nam = TRUE}}
-#'   \item{NAM_svs}{The _squared_ singular values returned by [scd()]. 
+#'   returned by [svd()]). If \code{return.nam = TRUE}}
+#'   \item{NAM_svs}{The _squared_ singular values returned by [svd()]. 
 #'   If \code{return.nam = TRUE}}
 #' }
 #' 
@@ -402,25 +446,17 @@ association <- function(data, nam.result, y,
     } else {
         nam_res <- nam.result
     }
+    # TODO: need `nam` to return batches so we don't need data at all if nam is 
+    # supplied.
     
-    ## For association, batches needs to be a numeric vector
     if (is.null(batches)) {
         X <- rep(1, data$N) |> as.factor()
-        # X <- Matrix::Matrix(rep(1, data$N), ncol = 1, sparse = TRUE)
     } else {
         X <- dplyr::pull(data$samplem, dplyr::one_of(batches)) |> 
             as.factor()
-        
-        # batches_df <- data$samplem[, batches, drop = FALSE] 
-        # bform <- paste0("~ 0 + ", paste0(colnames(batches_df), collapse = " + ")) |> 
-        #     as.formula()
-        # X <- Matrix::sparse.model.matrix(bform, batches_df)
     }
     
     if (verbose) message('Perform association testing')
-    ## TODO: add filter_samples to nam results
-    #         y[nam_res[[paste0('_filter_samples', suffix)]]],
-    #         batches[nam_res[paste0('_filter_samples', suffix)]] 
     res <- innerAssociation(NAMsvd = nam_res,
                             y = nam_res$y, 
                             batches_vec = X, 
@@ -436,8 +472,6 @@ association <- function(data, nam.result, y,
         res[[paste0('NAM_loadings', suffix)]] <- nam_res[[paste0("NAM_sampleXpc", suffix)]]
         res[[paste0('NAM_svs', suffix)]] <- nam_res[[paste0("NAM_svs", suffix)]]
     }
-    # TODO: add info about kept cells
-    #     vars(res)['kept'] = du['keptcells'+suffix]
     
     return(res)
 }

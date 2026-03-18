@@ -2,19 +2,20 @@
 % Please edit documentation in R/utils_nam.R
 \name{batchKurtosis}
 \alias{batchKurtosis}
-\title{calculate kurtosis accounting for batch}
+\title{Calculate kurtosis accounting for batch}
 \usage{
 batchKurtosis(NAM, batch)
 }
 \arguments{
-\item{NAM}{A NAM matrix as calculated by [buildNAM()]}
+\item{NAM}{An M x N (Cells x Samples) neighborhood association matrix as 
+calculated by [buildNAM()]}
 
 \item{batch}{A factor containing batch information}
 }
 \value{
-a vector of kurtosis values for each row (cell) in NAM
+a vector of kurtosis values for each column (cell) in the NAM
 }
 \description{
-calculate kurtosis accounting for batch
+Calculate kurtosis accounting for batch
 }
 \keyword{internal}

@@ -14,25 +14,28 @@ buildNAM(
 )
 }
 \arguments{
-\item{data}{A rcna data object (list).}
+\item{data}{A rcna data object (list). See [nam()] or [association()] for details.}
 
 \item{n.steps}{A numeric, the number of steps to take during the random walk. 
 If NULL, then `kurt.delta` is checked at each step to decide whether or not 
 to take the next step. \cr
 Default: NULL}
 
-\item{min.steps}{A numeric value controlling the minimum number of steps to take. \cr
+\item{min.steps}{A numeric value controlling the minimum number of steps to take. 
+Only used if n.steps is NULL. \cr
 Default: 3}
 
-\item{max.steps}{A numeric value controlling the maximum number of steps to take. \cr
+\item{max.steps}{A numeric value controlling the maximum number of steps to take. 
+Only used if n.steps is NULL. \cr
 Default: 15}
 
 \item{kurt.delta}{The minimum change in kurtosis between steps under which
-the walk stops. \cr
+the walk stops (if min.steps have already been made). Only used if n.steps is NULL.\cr
 Default: 3}
 }
 \value{
-A sparseMatrix containing the NAM
+A sparseMatrix containing the NAM (A cell by sample neighborhood
+association matrix).
 }
 \description{
 Calculate Neighborhood Association Matrix (NAM) using diffusion mapping

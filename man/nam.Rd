@@ -33,7 +33,7 @@ obs_key = (character string indicating the column in obs uniquely identifying ce
 N = nrow(samplem_df).}
 
 \item{y}{A character string specifying the column in `data$samplem` where 
-the variable of interest is stored.\cr}
+the variable of interest is stored.}
 
 \item{batches}{A character string denoting the column in `data$samplem` where
 batch information is stored. Only a single batch variable is allowed. \cr
@@ -90,11 +90,25 @@ Default: ""}
 
 \item{verbose}{Logical scalar controlling verbosity. \cr
 Default: FALSE}
-
-\item{...}{Additional parameters passed to [buildNAM()].}
 }
 \value{
-A list containing the NAM and associated variables.
+A named list. All keys are optionally suffixed by \code{suffix}.
+\describe{
+  \item{y}{Numeric vector of the (possibly coerced) response variable.}
+  \item{raw.NAM.T}{sparseMatrix. Transposed raw NAM (cells × samples) before
+    QC or residualisation.}
+  \item{qc.NAM.T}{sparseMatrix. Transposed NAM after batch-kurtosis QC.}
+  \item{resid.NAM.T}{sparseMatrix. Transposed NAM after residualisation.}
+  \item{_M}{The annihilator matrix from [residNAM()].}
+  \item{_r}{Numeric. Degrees of freedom consumed by the correction.}
+  \item{NAM_sampleXpc}{Matrix (samples × PCs): left singular vectors.}
+  \item{NAM_svs}{Numeric vector of squared singular values.}
+  \item{NAM_varexp}{Numeric vector of variance explained per PC.}
+  \item{NAM_nbhdXpc}{Matrix (cells × PCs): right singular vectors.}
+  \item{keptcells}{Integer index vector of retained cell columns after QC.}
+  \item{_batches}{Factor of batch labels, or \code{NULL}.}
+  \item{covariates}{sparseMatrix of covariates, or \code{NA_real_} if none.}
+}
 }
 \description{
 Build and decompose a neighborhood abundance matrix

@@ -1,15 +1,16 @@
 
 #' Extract information from SingleCellExperiment object to create CNA object
 #' 
-#' @param sce Initialized Seurat object. Assumes that FindNeighborhoods has been run.
-#' @param sample_key Character string denoting the name of the sample-level identifier (e.g. DonorID). 
-#' @param sample_vars Character string or vector specifying Which columns of 
+#' @param sce A SingleCellExperiment object. 
+#' @param sample_key A character string denoting the name of the sample-level 
+#' identifier (e.g. DonorID). 
+#' @param sample_vars A character string or vector specifying which columns of 
 #' `colData(sce)` should be included. This should include any columns for batch
 #' and covariates. 
-#' @param graph A KNN graph in sparseMatrix format or the name of such a graph
-#' stored in `colPairs(sce)`. 
+#' @param graph A KNN graph in sparseMatrix format, or the name of such a graph
+#' stored in `colPair(sce)`. 
 #' 
-#' @returns an rnca data object (list)
+#' @returns An `rnca` data object (list)
 #' 
 #' @export 
 createObject.SingleCellExperiment <- function(sce, 
@@ -56,13 +57,13 @@ createObject.SingleCellExperiment <- function(sce,
     return(rcna_object)
 }
 
-#' Extract information from Seurat object to create CNA object
+#' Perform CNA on and assign the results to the input SingleCellExperiment object. 
 #' 
-#' @param sce Initialized SingleCellExperiment object. 
+#' @param sce A SingleCellExperiment object. 
 #' @param test_var Variable to test for association. 
 #' @param sample_key String denoting the name of the sample-level identifier (e.g. DonorID). 
 #' @param graph A KNN graph in sparseMatrix format or the name of such a graph
-#' stored in `colPairs(sce)`. 
+#' stored in `colPair(sce)`. 
 #' @param batches A character string. Name of batch variable. Currently only one 
 #' categorical variable allowed. 
 #' @param covs A character string or vector. Name(s) of other (numerical) covariates 
@@ -70,7 +71,11 @@ createObject.SingleCellExperiment <- function(sce,
 #' @param verbose Logical controlling verbosity
 #' @param ... Passed to [association()]
 #' 
-#' @return A seurat object
+#' @return A SingleCellExperiment object with NAM embeddings stored in 
+#' `reducedDim(sce, "CNA")`, results stored in `metadata(sce)$CNA`, and correlation
+#' values stored in `colData(sce)` as `cna_ncorrs`, `cna_ncorrs_fdr05`, and 
+#' `cna_ncorrs_fdr10`
+#' 
 #' 
 #' @export 
 association.SingleCellExperiment <- function(sce, 
@@ -80,7 +85,7 @@ association.SingleCellExperiment <- function(sce,
                                              graph, 
                                              batches = NULL, 
                                              covs = NULL, 
-                                             verbose=TRUE, 
+                                             verbose = TRUE, 
                                              ...) {
     
     ## (1) format data 

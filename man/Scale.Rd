@@ -14,7 +14,7 @@ Scale(x, center = TRUE, scale = TRUE)
 \item{scale}{A boolean, should x be scaled}
 }
 \value{
-a sparseMatrix ("dgeMatrix")
+A dense sparseMatrix ("dgeMatrix")
 }
 \description{
 A scale function for sparseMatrix

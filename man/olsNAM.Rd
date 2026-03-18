@@ -7,7 +7,8 @@
 olsNAM(NAM, cov.mat = NULL, batch = NULL)
 }
 \arguments{
-\item{NAM}{A neighborhood association matrix}
+\item{NAM}{An M x N (Cells x Samples) neighborhood association matrix as 
+calculated by [buildNAM()]}
 
 \item{cov.mat}{a matrix of covariates. \cr
 Default: NULL}
@@ -16,8 +17,8 @@ Default: NULL}
 Default: NULL}
 }
 \value{
-A list containing the corrected NAM, the Hat matrix (M), and degrees 
-of freedom (r)
+A list containing the corrected NAM, the annihilator matrix (M), 
+and OLS degrees of freedom consumed (r)
 }
 \description{
 Perform batch correction of a NAM with OLS regression

@@ -7,11 +7,11 @@
 diffuseStep(a, s)
 }
 \arguments{
-\item{a}{A sparseMatrix M by M adjacency matrix (connectivities) whose m,m'-th
-entry indicates the similarity between cells m and m' in the graph}
+\item{a}{A sparseMatrix M by M (cells x cells) adjacency matrix (connectivities) 
+whose m,m'-th entry indicates the similarity between cells m and m' in the graph}
 
-\item{s}{A sparseMatrix M by N indicator matrix assigning the m-th cell to the
-n-th sample from which it was drawn.}
+\item{s}{A sparseMatrix M by N (cells x samples) indicator matrix assigning 
+the m-th cell to the n-th sample from which it was drawn.}
 }
 \value{
 A M by N sparseMatrix.
