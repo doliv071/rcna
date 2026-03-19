@@ -1,19 +1,26 @@
 #' Calculate kurtosis of the rows or columns of a sparseMatrix 
 #' 
 #' @param x A sparseMatrix for which the row or column kurtosis should be calculated
-#' @param margin An integer specifying the margin over which to calculate kurtosis
-#' 1 for rows and 2 for columns.\cr
-#' Default: 2L
+#' @param margin If not missing, then an integer specifying the margin over which 
+#' to calculate kurtosis 1 for rows and 2 for columns. If missing, the kurtosis of 
+#' the whole matrix is calculated. 
 #' @param na.rm A logical controlling whether NAs should be removed from the calculation.\cr
 #' Default: FALSE
 #' 
 #' @return the row- or column-wise kurtosis of x
 #' 
 #' @keywords internal
-Kurtosis <- function(x, margin = 2L, na.rm = FALSE){
-    stopifnot(is.numeric(margin) && length(margin) == 1)
+Kurtosis <- function(x, margin, na.rm = FALSE){
+    if(!missing(margin)){
+        stopifnot(margin %in% c(1L, 2L) && length(margin) == 1)
+    }
     stopifnot(is.matrix(x) || isa(x, "Matrix"))
-    if(margin == 1){
+    if(missing(margin)){
+        mu <- Matrix::means(x, na.rm = na.rm)
+        m2 <- Matrix::means(x^2, na.rm = na.rm)
+        m3 <- Matrix::means(x^3, na.rm = na.rm)
+        m4 <- Matrix::means(x^4, na.rm = na.rm)
+    } else if(margin == 1){
         mu <- Matrix::rowMeans(x, na.rm = na.rm)
         m2 <- Matrix::rowMeans(x^2, na.rm = na.rm)
         m3 <- Matrix::rowMeans(x^3, na.rm = na.rm)
@@ -24,7 +31,7 @@ Kurtosis <- function(x, margin = 2L, na.rm = FALSE){
         m3 <- Matrix::colMeans(x^3, na.rm = na.rm)
         m4 <- Matrix::colMeans(x^4, na.rm = na.rm)
     } else {
-        stop("'margin' only supports single dimension of a matrix (1 or 2).")
+        stop("'margin' only supports none or a single dimension of a matrix (1 or 2).")
     }
     
     # Expanded 4th central moment: E[(X-mu)^4]
@@ -48,7 +55,7 @@ Kurtosis <- function(x, margin = 2L, na.rm = FALSE){
 #' 
 #' @keywords internal
 propTable <- function(x, margin){
-    stopifnot(is.numeric(margin) && length(margin) == 1)
+    stopifnot(margin %in% c(1L, 2L) && length(margin) == 1)
     stopifnot(is.matrix(x) || isa(x, "Matrix"))
     if(margin == 1){
         res <- Matrix::t(Matrix::crossprod(x, Matrix::Diagonal(x = 1 /  Matrix::rowSums(x))))
@@ -70,6 +77,7 @@ propTable <- function(x, margin){
 #'
 #' @keywords internal
 Scale <- function(x, center = TRUE, scale = TRUE){
+    stopifnot(isa(x, "Matrix") || is.matrix(x))
     if(center){
         centers <- Matrix::colMeans(x)
         x <- Matrix::t(Matrix::t(x) - centers)

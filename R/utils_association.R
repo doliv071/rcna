@@ -8,6 +8,11 @@
 #'
 #' @keywords internal
 regress <- function(q, k, U) {
+    stopifnot(is.numeric(q))
+    stopifnot(is.numeric(k) && length(k) == 1 && k >= 1 && k <= ncol(U))
+    stopifnot(is.matrix(U) || isa(U, "Matrix"))
+    stopifnot(length(q) == nrow(U))
+    
     Xpc <- U[, 1:k]
     beta <- crossprod(Xpc, q)
     qhat <- Xpc %*% beta
@@ -32,6 +37,11 @@ regress <- function(q, k, U) {
 #' 
 #' @keywords internal
 calcStats <- function(yhat, ycond, k, n, r, log.p = FALSE) {
+    stopifnot(is.numeric(k) && length(k) == 1 && k >= 1)
+    stopifnot(is.numeric(n) && length(n) == 1 && n > 1 + r + k)
+    stopifnot(is.numeric(r) && length(r) == 1 && r >= 0)
+    stopifnot(is.logical(log.p) && length(log.p) == 1)
+    
     ssefull <- crossprod(yhat - ycond)
     ssered <- crossprod(ycond)
     deltasse <-  ssered - ssefull
@@ -66,6 +76,12 @@ calcStats <- function(yhat, ycond, k, n, r, log.p = FALSE) {
 #' 
 #' @keywords internal
 minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
+    stopifnot(is.matrix(M) || isa(M, "Matrix"))
+    stopifnot(is.numeric(y))
+    stopifnot(nrow(M) == ncol(M) && nrow(M) == length(y))
+    stopifnot(is.numeric(ks) && all(ks >= 1) && all(ks <= ncol(U)))
+    stopifnot(is.logical(use.logp) && length(use.logp) == 1)
+    
     n <- length(y)
     zcond <- M %*% y
     zcond <- scale(zcond, center = FALSE, scale = TRUE)
@@ -85,7 +101,7 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #' 
 #' @param NAMsvd The list output from the [nam()] function.
 #' @param y A vector with contrast variable value to be tested for association.
-#' @param batches_vec A factor or numeric vector of batches to adjust for.
+#' @param batches_vec NULL or a factor of batches to adjust for.
 #' @param ks A numeric scalar selecting the number of components of the SVD
 #' to test for global association. If null 4 values for k are selected between
 #' n/50 and n/5. \cr
@@ -110,6 +126,8 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #' @param seed A numeric seed to set. Set if you want to repeat exact permutations
 #' as a previous run. If NULL, a random seed is chosen. \cr
 #' Default: NULL
+#' @param verbose A logical controlling verbosity.\cr
+#' Default: FALSE
 #'
 #' @returns A named list with the following elements:
 #' \describe{
@@ -146,15 +164,28 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
                              allow_duplicate_perms = TRUE,
                              local_test = TRUE, 
                              use.logp = FALSE,
-                             seed = NULL) {
+                             seed = NULL, 
+                             verbose = FALSE) {
+    stopifnot(is.list(NAMsvd))
+    stopifnot(all(c("NAM_sampleXpc", "NAM_svs", 
+                    "NAM_nbhdXpc", "_M", "_r") %in% names(NAMsvd)))
+    stopifnot(is.numeric(y))
+    stopifnot(is.numeric(Nnull) && length(Nnull) == 1 && Nnull >= 1)
+    stopifnot(is.logical(force_permute_all) && length(force_permute_all) == 1)
+    stopifnot(is.logical(allow_duplicate_perms) && length(allow_duplicate_perms) == 1)
+    stopifnot(is.logical(local_test) && length(local_test) == 1)
+    stopifnot(is.logical(use.logp) && length(use.logp) == 1)
+    
     if (is.null(seed)) {
         seed <- sample(1e6, 1)
+    } else {
+        stopifnot(is.numeric(seed) && length(seed) == 1)
     }
     set.seed(seed)
-    if (force_permute_all) {
-        batches_vec <- rep(1L, length(y))
-    } 
     
+    if (force_permute_all || is.null(batches_vec)) {
+        batches_vec <- rep(1L, length(y)) |> factor()
+    } 
     # prep data
     U <- NAMsvd[["NAM_sampleXpc"]]
     sv <- NAMsvd[["NAM_svs"]]
@@ -219,7 +250,7 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
     fdr_10p_t <- NULL
     
     if (local_test) {
-        message('computing neighborhood-level FDRs')
+        if(verbose) message('computing neighborhood-level FDRs')
         Nnull <- min(1000, ncol(y_null))
         y_null <- y_null[, 1:Nnull]
         ycond_null <- scale(M %*% y_null, center = FALSE, scale = TRUE)
@@ -350,20 +381,31 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #' 
 #' @return A named list with the following elements:
 #' \describe{
-#'   \item{p}{Empirical global association p-value from permutation test.}
-#'   \item{minps_null}{Numeric vector of length \code{Nnull} containing the
-#'     minimum permutation p-values from the null distribution.}
-#'   \item{k}{Integer. The number of NAM PCs selected by the minimum p-value
-#'     criterion.}
-#'   \item{ncorrs}{Matrix of neighborhood-level association scores, rows
-#'     corresponding to neighborhoods.}
-#'   \item{fdrs}{Data frame of FDR results from \code{\link{empirical_fdrs}},
-#'     or \code{NULL} if \code{local_test = FALSE}. Columns: \code{threshold},
-#'     \code{fdr}, \code{num_detected}.}
-#'   \item{fdr_5p_t}{Numeric scalar. Minimum threshold achieving FDR < 5\%,
-#'     or \code{NULL} if none exists.}
-#'   \item{fdr_10p_t}{Numeric scalar. Minimum threshold achieving FDR < 10\%,
-#'     or \code{NULL} if none exists.}
+#'   \item{p}{
+#'      Empirical global association p-value from permutation test.
+#'   }
+#'   \item{minps_null}{
+#'      Numeric vector of length \code{Nnull} containing the
+#'      minimum permutation p-values from the null distribution.
+#'   }
+#'   \item{k}{
+#'      Integer. The number of NAM PCs selected by the minimum p-value
+#'      criterion.
+#'   }
+#'   \item{ncorrs}{
+#'      Matrix of neighborhood-level association scores, rows
+#'      corresponding to neighborhoods.
+#'   }
+#'   \item{fdrs}{
+#'      Data frame of FDR results from [empirical_fdrs()], or NULL if 
+#'      `local_test = FALSE`. Columns: `threshold`, `fdr`, `num_detected`.
+#'   }
+#'   \item{fdr_5p_t}{
+#'      Numeric scalar. Minimum threshold achieving FDR < 5\%, or NULL if none exists.
+#'   }
+#'   \item{fdr_10p_t}{
+#'      Numeric scalar. Minimum threshold achieving FDR < 10\%, or NULL if none exists.
+#'   }
 #'   \item{yhat}{Fitted values of \code{y} from the selected k-component model.}
 #'   \item{ycond}{Batch/covariate-conditioned and scaled \code{y} vector.}
 #'   \item{ks}{Numeric vector of k values that were tested.}
@@ -409,11 +451,15 @@ association <- function(data, nam.result, y,
     if(!missing(data) && missing(nam.result)){
         stopifnot(all(c("samplem", "obs", "connectivities", 
                         "samplem_key", "obs_key", "N") %in% names(data)))
-        stopifnot(batches %in% colnames(data$samplem))
-        stopifnot(all(covs %in% colnames(data$samplem)))
+        if(!is.null(batches)){
+            stopifnot(batches %in% colnames(data$samplem))
+        }
+        if(!is.null(covs)){
+            stopifnot(all(covs %in% colnames(data$samplem)))
+        }
     }
     # TODO: check NAs in batches and covariates.
-    stopifnot(length(batches) == 1 || is.null(batches))
+    stopifnot(is.null(batches) || (length(batches) == 1  && is.character(batches)))
     if(!is.null(n.steps)){
         stopifnot(length(n.steps) == 1 && is.numeric(n.steps))
     }
@@ -446,27 +492,25 @@ association <- function(data, nam.result, y,
     } else {
         nam_res <- nam.result
     }
-    # TODO: need `nam` to return batches so we don't need data at all if nam is 
-    # supplied.
     
-    if (is.null(batches)) {
-        X <- rep(1, data$N) |> as.factor()
+    if (is.null(nam_res[['_batches']])) {
+        X <- rep(1, length(nam_res[['y']])) |> as.factor()
     } else {
-        X <- dplyr::pull(data$samplem, dplyr::one_of(batches)) |> 
-            as.factor()
+        X <- nam_res[['_batches']]
     }
     
     if (verbose) message('Perform association testing')
     res <- innerAssociation(NAMsvd = nam_res,
                             y = nam_res$y, 
-                            batches_vec = X, 
+                            batches_vec = nam_res[['_batches']], 
                             ks = Ks, 
                             Nnull = N.nulls, 
                             force_permute_all = force.permute.all, 
                             allow_duplicate_perms = allow.duplicate.perms, 
                             local_test = local.test, 
                             use.logp = use.logp, 
-                            seed = seed)
+                            seed = seed,
+                            verbose = verbose)
     if (return.nam) {
         res[[paste0('NAM_embeddings', suffix)]] <- nam_res[[paste0("NAM_nbhdXpc", suffix)]]
         res[[paste0('NAM_loadings', suffix)]] <- nam_res[[paste0("NAM_sampleXpc", suffix)]]

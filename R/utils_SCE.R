@@ -20,11 +20,13 @@ createObject.SingleCellExperiment <- function(sce,
     if(any(c(missing(sce), missing(sample_key), missing(sample_vars), missing(graph)))){
         stop("Parameters missing with no default.")
     }
-    if(!isa(graph, "Matrix") || (!is.character(graph) && length(graph) == 1)){
+    if(!isa(graph, "Matrix") && !(is.character(graph) && length(graph) == 1)){
         stop("'graph' must be a sparseMatrix or character string")
     }
     if(isa(graph, "Matrix")){
-        stopifnot(all(dim(graph) == ncol(sce)))
+        if(!all(dim(graph) == ncol(sce))){
+            stop("'graph' must be a square sparseMatrix with dims equal to 'ncol(sce)'")
+        }
     } else if(is.character(graph)){
         stopifnot(graph %in% SingleCellExperiment::colPairNames(sce))
         graph <- SingleCellExperiment::colPair(sce, graph, asSparse = TRUE)
@@ -98,8 +100,9 @@ association.SingleCellExperiment <- function(sce,
                                                    graph)
     yvals <- rcna_data$samplem[[test_var]]
     if(is.character(yvals)) {
-        stop('test_var is of class {class(yvals)}. ",
-             "It must be numeric variable for association testing.')
+        warning("'test_var' points to a character vector. Converting it to numeric via factor", 
+                immediate. = TRUE)
+        yval <- as.numeric(as.factor(yvals))
     }
     
     ## (2) do association
@@ -132,7 +135,7 @@ association.SingleCellExperiment <- function(sce,
         sce$cna_ncorrs_fdr05[idx_passed] <- sce$cna_ncorrs[idx_passed]
     }
     
-    sce$cna_ncorrs_fdr10 <- rep(0, nrow(sce))
+    sce$cna_ncorrs_fdr10 <- rep(0, ncol(sce))
     if (!is.null(cna_res$fdr_10p_t)) {
         idx_passed <- which(abs(sce$cna_ncorrs) >= cna_res$fdr_10p_t)
         sce$cna_ncorrs_fdr10[idx_passed] <- sce$cna_ncorrs[idx_passed]

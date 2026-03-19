@@ -13,10 +13,18 @@
 #' Each column is one permutation of `Y` within batch levels.
 #'   
 #' @keywords internal
-conditional_permutation <- function(B, Y, num, seed, duplicates.ok = TRUE) {
+conditional_permutation <- function(B, Y, num, seed = NULL, duplicates.ok = TRUE) {
+    stopifnot(is.numeric(Y))
+    stopifnot(length(B) == length(Y))
+    stopifnot(is.numeric(num) && length(num) == 1 && num >= 1)
+    stopifnot(is.logical(duplicates.ok) && length(duplicates.ok) == 1)
+    if(is.null(seed)){
+        seed <- sample(1e6, 1)
+    }
+    set.seed(seed)
     # TODO: for certain combinations of length(Y) and B it is better to compute
     #       all permutations rather than sampling and filtering duplicates.
-    set.seed(seed)
+    
     y_perm <- lapply(seq_len(num), function(i) {
         res <- split(seq_len(length(Y)), B) |> 
             lapply(\(idx) {

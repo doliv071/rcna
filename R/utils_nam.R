@@ -11,6 +11,10 @@
 #' 
 #' @keywords internal
 diffuseStep <- function(a, s) {
+    stopifnot((isa(a, "Matrix") || is.matrix(a)) && nrow(a) == ncol(a))
+    stopifnot(isa(s, "Matrix") || is.matrix(s))
+    stopifnot(nrow(s) == ncol(a))
+    
     degrees <- Matrix::colSums(a) + 1
     s_norm <- s / degrees
     res <- (a %*% s_norm) + s_norm
@@ -28,12 +32,14 @@ diffuseStep <- function(a, s) {
 #' @keywords internal
 batchKurtosis <- function(NAM, batch) {
     stopifnot(is.factor(batch))
-    stopifnot(isa(NAM, "Matrix"))
+    stopifnot(isa(NAM, "Matrix") || is.matrix(NAM))
+    stopifnot(length(batch) == nrow(NAM))
     
     bI <- Matrix::fac2sparse(batch)
     # mean batch NAM
-    bNAM <- Matrix::t(bI %*% NAM) %*% Matrix::Diagonal(x = 1 / Matrix::rowSums(bI))
-    res <- Kurtosis(bNAM, margin = 1)
+    bNAM <- Matrix::Diagonal(x = 1 / Matrix::rowSums(bI)) %*% bI %*% NAM
+    # bNAM <- Matrix::t(bI %*% NAM) %*% Matrix::Diagonal(x = 1 / Matrix::rowSums(bI))
+    res <- Kurtosis(bNAM, margin = 2)
     return(res)
 }
 
@@ -61,24 +67,25 @@ qcNAM <- function(NAM,
                   batch = NULL, 
                   min.threshold = 6,
                   verbose = FALSE) {
-
+    stopifnot(isa(NAM, "Matrix") || is.matrix(NAM))
+    stopifnot(is.numeric(min.threshold) && length(min.threshold) == 1 && min.threshold >= 0)
+    stopifnot(is.logical(verbose) && length(verbose) == 1)
+    if (!is.null(batch)) {
+        stopifnot(is.factor(batch) && length(batch) == nrow(NAM))
+    }
     if (is.null(batch) || length(unique(batch)) == 1) {
         if(verbose) message('Only one unique batch supplied to qc')
         keep <- rep(TRUE, ncol(NAM))
         res <- list(NAM = NAM, keep = keep)
     } else {
-        medkurt <- Kurtosis(NAM, margin = 1) |> median()
+        # TODO: check that this is the right margin...
+        # medkurt <- Kurtosis(NAM, margin = 2) |> median()
         kurtoses <- batchKurtosis(NAM, batch)
-        # TODO: add batch level kurtosis message
-        # if(verbose) message("")
-        
         if(verbose) message("Median batch kurtosis: ", round(median(kurtoses), 3))
         threshold <- max(min.threshold, 2*median(kurtoses))
         if(verbose) message("Throwing out neighborhoods with batch kurtosis >= ", threshold)
         keep <- which(kurtoses < threshold)
         if(verbose) message("keeping ", length(keep), " neighborhoods")
-        # if(verbose) message("Median batch kurtosis after filtering: ", 
-        #                     round(kurtoses, 3))
         res <- list(NAM = NAM[, keep, drop = FALSE], keep = keep)
     }
     return(res) 
@@ -100,33 +107,35 @@ qcNAM <- function(NAM,
 olsNAM <- function(NAM, 
                    cov.mat = NULL, 
                    batch = NULL){
-    if(!is.null(batch)){
-        B <- Matrix::sparse.model.matrix(~0+batch)
-    } 
-    if(!is.null(cov.mat)){
-        C <- Scale(as(cov.mat, "sparseMatrix"))
-        
-    }
-    X <- cbind(B, C)
+    stopifnot(isa(NAM, "Matrix") || is.matrix(NAM))
     N <- nrow(NAM)
     I <- Matrix::Diagonal(n = N)
-    # catch if we got here without a batch or covariate matrix
-    if(is.null(X)){
+    # catch if we got here without a batch or covariate matrix somehow
+    if(is.null(batch) && is.null(cov.mat)){
         warning("no batch or cov.mat supplied.", immediate. = TRUE)
         res <- list(NAM_ = NAM, 
                     M = I,
                     r = 0)
-    } else {
-        dfs <- ncol(X)
-        H <- X %*% Matrix::solve(Matrix::crossprod(X, X), Matrix::t(X))
-        M <- I - H
-        NAM_ <- M %*% NAM 
-        colnames(NAM_) <- colnames(NAM)
-        rownames(NAM_) <- rownames(NAM)
-        res <- list(NAM_ = NAM_, 
-                    M = M,
-                    r = dfs)
     }
+    if(!is.null(batch)){
+        stopifnot(is.factor(batch) && length(batch) == nrow(NAM))
+        B <- Matrix::sparse.model.matrix(~0+batch)
+    } 
+    if(!is.null(cov.mat)){
+        stopifnot((is.matrix(cov.mat) || isa(cov.mat, "Matrix")) && nrow(cov.mat) == nrow(NAM))
+        C <- Scale(as(cov.mat, "sparseMatrix"))
+    }
+    X <- cbind(B, C)
+    dfs <- ncol(X)
+    H <- X %*% Matrix::solve(Matrix::crossprod(X, X), Matrix::t(X))
+    M <- I - H
+    NAM_ <- M %*% NAM 
+    colnames(NAM_) <- colnames(NAM)
+    rownames(NAM_) <- rownames(NAM)
+    res <- list(NAM_ = NAM_, 
+                M = M,
+                r = dfs)
+    
     return(res)
 }
 
@@ -146,6 +155,8 @@ olsNAM <- function(NAM,
 #' should be used on, the other set does not get penalized. Must be one of "batches" or
 #' "covariates". \cr 
 #' Default: NULL
+#' @param verbose Logical controlling verbosity.\cr
+#' Default: FALSE
 #'
 #' @returns A list containing the corrected NAM, the Hat matrix (M), and the 
 #' effective degree of freedom (`sum(diag(H))` from the ridge hat matrix) (r)
@@ -155,16 +166,29 @@ ridgeNAM <- function(NAM,
                      cov.mat = NULL, 
                      batch = NULL, 
                      ridges = NULL,
-                     partial = NULL){
+                     partial = NULL,
+                     verbose = FALSE){
+    stopifnot(isa(NAM, "Matrix") || is.matrix(NAM))
     if(!is.null(partial)){
         partial <- match.arg(partial, c("batches", "covariates"))
     }
     if(!is.null(partial) && any(c(is.null(cov.mat), is.null(batch)))){
         warning("'partial' is not null, but only 'cov.mat' or 'batch' supplied.",
                 " Using standard ridge regression.")
+        partial <- NULL
     }
+    if(!is.null(ridges)){
+        stopifnot(is.numeric(ridges) && all(ridges >= 0))
+    }
+    
     dfs <- 0
+    N <- nrow(NAM)
+    I <- Matrix::Diagonal(n = N)
+    
     if(!is.null(batch) && !is.null(cov.mat)){
+        stopifnot(is.factor(batch) && length(batch) == nrow(NAM))
+        stopifnot((is.matrix(cov.mat) || isa(cov.mat, "Matrix")) && nrow(cov.mat) == nrow(NAM))
+        
         B <- Matrix::sparse.model.matrix(~0+batch)
         C <- as(cov.mat, "sparseMatrix")
         X <- Scale(cbind(B, C))
@@ -179,14 +203,21 @@ ridgeNAM <- function(NAM,
             dfs <- ncol(B)
         }
     } else if(!is.null(batch)){
+        stopifnot(is.factor(batch) && length(batch) == nrow(NAM))
         X <- Matrix::sparse.model.matrix(~0+batch) |> Scale()
         L <- Matrix::Diagonal(n = ncol(X))
     } else if (!is.null(cov.mat)) {
+        stopifnot((is.matrix(cov.mat) || isa(cov.mat, "Matrix")) && nrow(cov.mat) == nrow(NAM))
         X <- Scale(as(cov.mat, "sparseMatrix"))
         L <- Matrix::Diagonal(n = ncol(X))
+    } else {
+        warning("no batch or cov.mat supplied.", immediate. = TRUE)
+        res <- list(NAM_ = NAM, 
+                    M = I,
+                    r = 0)
+        return(res)
     }
-    N <- nrow(NAM)
-    I <- Matrix::Diagonal(n = N)
+    
     if(is.null(ridges)){
         sv_max <- svd(X)$d[1]^2
         ridges <- sv_max * 10^seq(3, -3, length.out = 20)
@@ -208,7 +239,7 @@ ridgeNAM <- function(NAM,
     colnames(NAM_) <- colnames(NAM)
     rownames(NAM_) <- rownames(NAM)
     kurtoses <- batchKurtosis(NAM_, batch) |> median()
-    message("with ridge ", lambda, " median batch kurtosis = ", kurtoses)
+    if(verbose) message("with ridge ", lambda, " median batch kurtosis = ", kurtoses)
     dfs <- dfs + sum(Matrix::diag(H))
     return(list(NAM_ = NAM_, 
                 M = M,
@@ -249,6 +280,14 @@ residNAM <- function(NAM,
                      partial.by = c("batches", "covariates"),
                      ridges = NULL, 
                      verbose = FALSE) {
+    stopifnot(isa(NAM, "Matrix") || is.matrix(NAM))
+    stopifnot(is.logical(verbose) && length(verbose) == 1)
+    if (!is.null(batch)) {
+        stopifnot(is.factor(batch) && length(batch) == nrow(NAM))
+    }
+    if (!is.null(covs.mat)) {
+        stopifnot((is.matrix(covs.mat) || isa(covs.mat, "Matrix")) && nrow(covs.mat) == nrow(NAM))
+    }
     method <- match.arg(method, choices = c("ridge", "ols"))
     
     NAM_ <- Scale(NAM, center = TRUE, scale = FALSE)
@@ -261,7 +300,9 @@ residNAM <- function(NAM,
             } else {
                 partial.by <- NULL
             }
-            NAMres <- ridgeNAM(NAM_, covs.mat, batch, ridges, partial = partial.by)
+            NAMres <- ridgeNAM(NAM_, covs.mat, batch, ridges, 
+                               partial = partial.by, 
+                               verbose = verbose)
         }
     } else {
         # pass through to generate proper results list. 
@@ -291,8 +332,11 @@ residNAM <- function(NAM,
 #' 
 #' @keywords internal
 svdNAM <- function(NAM, n.pcs = NULL) {
+    stopifnot(is.matrix(NAM) || isa(NAM, "Matrix"))
+    
     if (is.null(n.pcs) || n.pcs > .5 * min(dim(NAM))) {
         svd_res <- svd(NAM)
+        n.pcs <- min(dim(NAM))
     } else {
         svd_res <- RSpectra::svds(NAM, k = n.pcs)
     }
@@ -341,6 +385,14 @@ buildNAM <- function(data,
                      max.steps = 15L,
                      kurt.delta = 3, 
                      verbose = FALSE) {
+    
+    stopifnot(all(c("samplem", "obs", "connectivities", 
+                    "samplem_key", "obs_key") %in% names(data)))
+    stopifnot(isa(data$connectivities, "Matrix"))
+    stopifnot(is.numeric(min.steps) && length(min.steps) == 1 && min.steps >= 1)
+    stopifnot(is.numeric(max.steps) && length(max.steps) == 1 && max.steps >= min.steps)
+    stopifnot(is.numeric(kurt.delta) && length(kurt.delta) == 1 && kurt.delta > 0)
+    stopifnot(is.logical(verbose) && length(verbose) == 1)
     
     f <- as.formula(paste0("~ 0 + ", data$samplem_key))    
     s <- Matrix::sparse.model.matrix(f, data$obs)
@@ -463,7 +515,7 @@ nam <- function(data, y,
                 max.frac.pcs = 0.15, 
                 # passed to residNAM
                 method = c("ridge", "ols"),
-                partial.by = NULL,
+                partial.by = c("batches", "covariates"),
                 ridges = NULL,
                 # general
                 suffix = '',
@@ -485,11 +537,10 @@ nam <- function(data, y,
     stopifnot(is.numeric(min.batch.kurtosis) && length(min.batch.kurtosis) == 1)
     stopifnot(is.numeric(max.frac.pcs) && length(max.frac.pcs) == 1)
     # passed to residNAM
-    stopifnot(is.character(method) && length(method) == 1)
     method <- match.arg(method, c("ridge", "ols"))
-    stopifnot(is.character(method) && length(method) == 1)
-    stopifnot(is.null(partial.by) || (is.character(partial.by) && length(n.steps) == 1))
-    partial.by <- match.arg(partial.by, c("batches", "covariates"))
+    if(!is.null(partial.by)){
+        partial.by <- match.arg(partial.by, c("batches", "covariates"))
+    }
     stopifnot(is.null(ridges) || is.numeric(ridges))
     # general
     stopifnot(is.character(suffix) && length(suffix) == 1)
@@ -519,14 +570,9 @@ nam <- function(data, y,
         cov_mat <- NULL
     } else {
         # covariates must be numeric or factors
-        # TODO: actually check that they are numeric
-        cov_mat <- data$samplem[, covs, drop = FALSE] |> 
-            as("sparseMatrix")
-        # # covariates must be numeric or factors
-        # cov_df <- data$samplem[, covs, drop = FALSE] 
-        # cform <- paste0("~ 0 + ", paste0(colnames(cov_df), collapse = " + ")) |> 
-        #     as.formula()
-        # cov_mat <- Matrix::sparse.model.matrix(cform, cov_df)
+        cov_mat <- data$samplem[, covs, drop = FALSE] 
+        stopifnot(all(vapply(cov_mat, is.numeric, logical(1))))
+        cov_mat <- as(cov_mat, "sparseMatrix")
     }
     
     if (verbose) message('Constructing NAM')
@@ -581,7 +627,7 @@ nam <- function(data, y,
     res[['NAM_nbhdXpc']] <- res_svd_nam$V
     res[['keptcells']] <- res_qc_nam[[2]]
     res[['_batches']] <- batch_vec
-    res[['covariates']] <- cov_mat
+    res[['_covariates']] <- cov_mat
     
     names(res) <- paste0(names(res), suffix)
     
