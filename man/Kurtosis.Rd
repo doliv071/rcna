@@ -4,14 +4,14 @@
 \alias{Kurtosis}
 \title{Calculate kurtosis of the rows or columns of a sparseMatrix}
 \usage{
-Kurtosis(x, margin = 2L, na.rm = FALSE)
+Kurtosis(x, margin, na.rm = FALSE)
 }
 \arguments{
 \item{x}{A sparseMatrix for which the row or column kurtosis should be calculated}
 
-\item{margin}{An integer specifying the margin over which to calculate kurtosis
-1 for rows and 2 for columns.\cr
-Default: 2L}
+\item{margin}{If not missing, then an integer specifying the margin over which 
+to calculate kurtosis 1 for rows and 2 for columns. If missing, the kurtosis of 
+the whole matrix is calculated.}
 
 \item{na.rm}{A logical controlling whether NAs should be removed from the calculation.\cr
 Default: FALSE}

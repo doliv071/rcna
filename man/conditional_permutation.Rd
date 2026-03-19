@@ -4,7 +4,7 @@
 \alias{conditional_permutation}
 \title{Permute Y conditioned on B}
 \usage{
-conditional_permutation(B, Y, num, seed, duplicates.ok = TRUE)
+conditional_permutation(B, Y, num, seed = NULL, duplicates.ok = TRUE)
 }
 \arguments{
 \item{B}{A factor (or object coercible via \code{split()}) of length n

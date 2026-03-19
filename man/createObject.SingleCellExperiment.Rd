@@ -4,10 +4,19 @@
 \alias{createObject.SingleCellExperiment}
 \title{Extract information from SingleCellExperiment object to create CNA object}
 \usage{
-createObject.SingleCellExperiment(sce, sample_key, sample_vars, graph)
+createObject.SingleCellExperiment(
+  sce,
+  test_var,
+  sample_key,
+  sample_vars,
+  graph
+)
 }
 \arguments{
 \item{sce}{A SingleCellExperiment object.}
+
+\item{test_var}{A character string denoting the name of the variable to be 
+tested for association.}
 
 \item{sample_key}{A character string denoting the name of the sample-level 
 identifier (e.g. DonorID).}

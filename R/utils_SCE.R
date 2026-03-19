@@ -2,6 +2,8 @@
 #' Extract information from SingleCellExperiment object to create CNA object
 #' 
 #' @param sce A SingleCellExperiment object. 
+#' @param test_var A character string denoting the name of the variable to be 
+#' tested for association.
 #' @param sample_key A character string denoting the name of the sample-level 
 #' identifier (e.g. DonorID). 
 #' @param sample_vars A character string or vector specifying which columns of 
@@ -14,6 +16,7 @@
 #' 
 #' @export 
 createObject.SingleCellExperiment <- function(sce, 
+                                              test_var,
                                               sample_key, 
                                               sample_vars, 
                                               graph) {    
@@ -31,8 +34,9 @@ createObject.SingleCellExperiment <- function(sce,
         stopifnot(graph %in% SingleCellExperiment::colPairNames(sce))
         graph <- SingleCellExperiment::colPair(sce, graph, asSparse = TRUE)
     }
-    sample_vars <- c(sample_key, sample_vars)
+    sample_vars <- c(sample_key, sample_vars, test_var)
     samplem_df <- SummarizedExperiment::colData(sce) |> 
+        as.data.frame() |> 
         dplyr::select(dplyr::all_of(sample_vars)) |> 
         dplyr::distinct() |> 
         as.data.frame()
@@ -83,7 +87,6 @@ createObject.SingleCellExperiment <- function(sce,
 association.SingleCellExperiment <- function(sce, 
                                              test_var, 
                                              sample_key, 
-                                             # sample_vars, 
                                              graph, 
                                              batches = NULL, 
                                              covs = NULL, 
@@ -94,15 +97,16 @@ association.SingleCellExperiment <- function(sce,
     covs_keep <- test_var
     if (!is.null(batches)) covs_keep <- c(covs_keep, batches)
     if (!is.null(covs)) covs_keep <- c(covs_keep, covs)
-    rcna_data <- createObject.SingleCellExperiment(sce, 
-                                                   sample_key, 
-                                                   sample_vars = covs_keep, 
-                                                   graph)
+    rcna_data <- createObject.SingleCellExperiment(sce = sce, 
+                                                   test_var = test_var,
+                                                   sample_key = sample_key ,   
+                                                   sample_vars = covs_keep,   
+                                                   graph = graph)  
     yvals <- rcna_data$samplem[[test_var]]
     if(is.character(yvals)) {
         warning("'test_var' points to a character vector. Converting it to numeric via factor", 
                 immediate. = TRUE)
-        yval <- as.numeric(as.factor(yvals))
+        rcna_data$samplem[[test_var]] <- as.numeric(as.factor(yvals))
     }
     
     ## (2) do association
@@ -110,18 +114,21 @@ association.SingleCellExperiment <- function(sce,
                            y = test_var, 
                            batches = batches, 
                            covs = covs,
+                           return.nam = TRUE,
                            verbose = verbose,
                            ...) 
 
     # cna_res$samplem_df = rcna_data$samplem
     
     ## (3) save results 
-    SingleCellExperiment::reducedDim(sce, "CNA") <- LinearEmbeddingMatrix(
-        sampleFactors = cna_res$NAM_embeddings, 
-        featureLoadings = cna_res$NAM_loadings, 
-        factorData = S4Vectors::DataFrame(svs = cna_res$NAM_svs),
-        metadata = list()
-    )
+    colnames(cna_res$NAM_embeddings) <- paste0("NAMPC_", seq_len(ncol(cna_res$NAM_embeddings)))
+    SingleCellExperiment::reducedDim(sce, "CNA") <- cna_res$NAM_embeddings
+    # SingleCellExperiment::reducedDim(sce, "CNA") <- LinearEmbeddingMatrix(
+    #     sampleFactors = cna_res$NAM_embeddings, 
+    #     featureLoadings = cna_res$NAM_loadings, 
+    #     factorData = S4Vectors::DataFrame(svs = cna_res$NAM_svs),
+    #     metadata = list()
+    # )
     # put the rest into metadata
     S4Vectors::metadata(sce)$CNA <- cna_res[!names(cna_res) %in% 
                                                 c("NAM_embeddings", "NAM_loadings", "NAM_svs")]

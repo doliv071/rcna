@@ -4,7 +4,14 @@
 \alias{ridgeNAM}
 \title{Perform batch correction of a NAM using (partial) ridge regression}
 \usage{
-ridgeNAM(NAM, cov.mat = NULL, batch = NULL, ridges = NULL, partial = NULL)
+ridgeNAM(
+  NAM,
+  cov.mat = NULL,
+  batch = NULL,
+  ridges = NULL,
+  partial = NULL,
+  verbose = FALSE
+)
 }
 \arguments{
 \item{NAM}{An M x N (Cells x Samples) neighborhood association matrix as 
@@ -25,6 +32,9 @@ on all variables. If a character, specify which set of variables ridge regressio
 should be used on, the other set does not get penalized. Must be one of "batches" or
 "covariates". \cr 
 Default: NULL}
+
+\item{verbose}{Logical controlling verbosity.\cr
+Default: FALSE}
 }
 \value{
 A list containing the corrected NAM, the Hat matrix (M), and the 

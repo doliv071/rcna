@@ -16,7 +16,7 @@ nam(
   min.batch.kurtosis = 6,
   max.frac.pcs = 0.15,
   method = c("ridge", "ols"),
-  partial.by = NULL,
+  partial.by = c("batches", "covariates"),
   ridges = NULL,
   suffix = "",
   filter.samples = NULL,

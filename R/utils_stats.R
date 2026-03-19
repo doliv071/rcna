@@ -102,3 +102,38 @@ empirical_fdrs <- function(z, znull, thresholds) {
                        num_detected = num_detected) 
     return(fdrs)
 }
+
+
+#' Thoughts on calculating possible permutations ahead of time.
+#' 
+#' @param B a factor
+#' @param Y a numeric vector
+#'
+#' @keywords internal
+#' @noRd
+maxPerms <- function(B, Y){
+    stopifnot(is.factor(B))
+    stopifnot(length(B) == length(Y))
+    
+    grps <- unique(B)
+    n <- length(grps)
+    
+    dups <- duplicated(Y) | duplicated(Y, fromLast = TRUE)
+    dup.grp <- table(B, Y) 
+    if(ncol(dup.grp) < length(Y)){
+        f.num <- vapply(seq_len(n), \(i) sum(B == grps[i]), integer(1)) |> 
+            factorial()
+        f.den <- vapply(split(Y, B), \(x){
+            vapply(seq_along(x), \(i) sum(x == x[i]), integer(1)) |> 
+                unique() |> factorial() |> prod()
+        }, numeric(1), USE.NAMES = FALSE)
+        nperms <- prod(f.num/f.den)
+    } else {
+        nperms <- vapply(seq_len(n), \(i) sum(B == grps[i]), integer(1)) |> 
+            factorial(n.grps) |> prod()
+    } 
+    return(nperms)
+}
+
+
+

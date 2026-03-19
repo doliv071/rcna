@@ -214,9 +214,10 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
     p <- mp$p 
     r2 <- mp$r2
     if (k == max(ks)) {
-        warning("data supported use of ", k, 
+        warning("Data supported use of ", k, 
                 " NAM PCs, which is the maximum considered.", 
-                " Consider allowing more PCs by using the 'ks' argument.")        
+                " Consider allowing more PCs by using the 'ks' argument.", 
+                call. = FALSE)
     }
     
     # compute coefficients and r2 with chosen model

@@ -14,7 +14,8 @@ innerAssociation(
   allow_duplicate_perms = TRUE,
   local_test = TRUE,
   use.logp = FALSE,
-  seed = NULL
+  seed = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -22,7 +23,7 @@ innerAssociation(
 
 \item{y}{A vector with contrast variable value to be tested for association.}
 
-\item{batches_vec}{A factor or numeric vector of batches to adjust for.}
+\item{batches_vec}{NULL or a factor of batches to adjust for.}
 
 \item{ks}{A numeric scalar selecting the number of components of the SVD
 to test for global association. If null 4 values for k are selected between
@@ -54,6 +55,9 @@ Default: FALSE}
 \item{seed}{A numeric seed to set. Set if you want to repeat exact permutations
 as a previous run. If NULL, a random seed is chosen. \cr
 Default: NULL}
+
+\item{verbose}{A logical controlling verbosity.\cr
+Default: FALSE}
 }
 \value{
 A named list with the following elements:

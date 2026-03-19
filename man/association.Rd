@@ -124,20 +124,31 @@ Default: FALSE}
 \value{
 A named list with the following elements:
 \describe{
-  \item{p}{Empirical global association p-value from permutation test.}
-  \item{minps_null}{Numeric vector of length \code{Nnull} containing the
-    minimum permutation p-values from the null distribution.}
-  \item{k}{Integer. The number of NAM PCs selected by the minimum p-value
-    criterion.}
-  \item{ncorrs}{Matrix of neighborhood-level association scores, rows
-    corresponding to neighborhoods.}
-  \item{fdrs}{Data frame of FDR results from \code{\link{empirical_fdrs}},
-    or \code{NULL} if \code{local_test = FALSE}. Columns: \code{threshold},
-    \code{fdr}, \code{num_detected}.}
-  \item{fdr_5p_t}{Numeric scalar. Minimum threshold achieving FDR < 5\%,
-    or \code{NULL} if none exists.}
-  \item{fdr_10p_t}{Numeric scalar. Minimum threshold achieving FDR < 10\%,
-    or \code{NULL} if none exists.}
+  \item{p}{
+     Empirical global association p-value from permutation test.
+  }
+  \item{minps_null}{
+     Numeric vector of length \code{Nnull} containing the
+     minimum permutation p-values from the null distribution.
+  }
+  \item{k}{
+     Integer. The number of NAM PCs selected by the minimum p-value
+     criterion.
+  }
+  \item{ncorrs}{
+     Matrix of neighborhood-level association scores, rows
+     corresponding to neighborhoods.
+  }
+  \item{fdrs}{
+     Data frame of FDR results from [empirical_fdrs()], or NULL if 
+     `local_test = FALSE`. Columns: `threshold`, `fdr`, `num_detected`.
+  }
+  \item{fdr_5p_t}{
+     Numeric scalar. Minimum threshold achieving FDR < 5\%, or NULL if none exists.
+  }
+  \item{fdr_10p_t}{
+     Numeric scalar. Minimum threshold achieving FDR < 10\%, or NULL if none exists.
+  }
   \item{yhat}{Fitted values of \code{y} from the selected k-component model.}
   \item{ycond}{Batch/covariate-conditioned and scaled \code{y} vector.}
   \item{ks}{Numeric vector of k values that were tested.}
