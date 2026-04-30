@@ -65,6 +65,7 @@ batchKurtosis <- function(NAM, batch) {
 #' @keywords internal
 qcNAM <- function(NAM, 
                   batch = NULL, 
+                  donors = NULL,
                   min.threshold = 6,
                   verbose = FALSE) {
     stopifnot(isa(NAM, "Matrix") || is.matrix(NAM))
@@ -73,7 +74,10 @@ qcNAM <- function(NAM,
     if (!is.null(batch)) {
         stopifnot(is.factor(batch) && length(batch) == nrow(NAM))
     }
-    if (is.null(batch) || length(unique(batch)) == 1) {
+    if (!is.null(donors)) {
+        stopifnot(is.factor(donors) && length(donors) == nrow(NAM))
+    }
+    if (is.null(batch) && is.null(donors)) {
         if(verbose) message('Only one unique batch supplied to qc')
         keep <- rep(TRUE, ncol(NAM))
         res <- list(NAM = NAM, keep = keep)
@@ -89,54 +93,6 @@ qcNAM <- function(NAM,
         res <- list(NAM = NAM[, keep, drop = FALSE], keep = keep)
     }
     return(res) 
-}
-
-#' Perform batch correction of a NAM with OLS regression
-#'
-#' @param NAM An M x N (Cells x Samples) neighborhood association matrix as 
-#' calculated by [buildNAM()]
-#' @param cov.mat a matrix of covariates. \cr
-#' Default: NULL
-#' @param batch a factor containing the batch to correct. \cr
-#' Default: NULL
-#'
-#' @returns A list containing the corrected NAM, the annihilator matrix (M), 
-#' and OLS degrees of freedom consumed (r)
-#' 
-#' @keywords internal
-olsNAM <- function(NAM, 
-                   cov.mat = NULL, 
-                   batch = NULL){
-    stopifnot(isa(NAM, "Matrix") || is.matrix(NAM))
-    N <- nrow(NAM)
-    I <- Matrix::Diagonal(n = N)
-    # catch if we got here without a batch or covariate matrix somehow
-    if(is.null(batch) && is.null(cov.mat)){
-        warning("no batch or cov.mat supplied.", immediate. = TRUE)
-        res <- list(NAM_ = NAM, 
-                    M = I,
-                    r = 0)
-    }
-    if(!is.null(batch)){
-        stopifnot(is.factor(batch) && length(batch) == nrow(NAM))
-        B <- Matrix::sparse.model.matrix(~0+batch)
-    } 
-    if(!is.null(cov.mat)){
-        stopifnot((is.matrix(cov.mat) || isa(cov.mat, "Matrix")) && nrow(cov.mat) == nrow(NAM))
-        C <- Scale(as(cov.mat, "sparseMatrix"))
-    }
-    X <- cbind(B, C)
-    dfs <- ncol(X)
-    H <- X %*% Matrix::solve(Matrix::crossprod(X, X), Matrix::t(X))
-    M <- I - H
-    NAM_ <- M %*% NAM 
-    colnames(NAM_) <- colnames(NAM)
-    rownames(NAM_) <- rownames(NAM)
-    res <- list(NAM_ = NAM_, 
-                M = M,
-                r = dfs)
-    
-    return(res)
 }
 
 #' Perform batch correction of a NAM using (partial) ridge regression
@@ -254,18 +210,15 @@ ridgeNAM <- function(NAM,
 #' Default NULL
 #' @param batch A factor containing batch information.\cr
 #' Default NULL
-#' @param method A character string specifying what method to use for batch
-#' and covariate correction. Options are: c("ridge", "ols"), Setting to "ridge"
-#' will reproduce original `rcna` behavior.
 #' @param partial.by A character string. One of NULL, "batches", or "covariates". 
-#' If `method == "ridge"` then ridge penalties are only applied to those variables.
+#' Ridge penalties are only applied to those variables specified.
 #' If NULL then all variables are penalized. Setting to "batches" will reproduce
 #' original `rcna` behavior.\cr
 #' Default: NULL
 #' @param ridges A numeric vector of ridge penalties to try. If NULL, a default
 #' set of ridges centered on `svd(X)$d[1]^2` is used.\cr
 #' Default NULL
-#' 
+#' @param donors STUB
 #' @note assumes that covariates are not categorical
 #' 
 #' @returns A list containing the residuals NAM (NAM_), the annihilator matrix 
@@ -276,7 +229,7 @@ ridgeNAM <- function(NAM,
 residNAM <- function(NAM, 
                      covs.mat = NULL, 
                      batch = NULL, 
-                     method = c("ridge", "ols"),
+                     donors = NULL,
                      partial.by = c("batches", "covariates"),
                      ridges = NULL, 
                      verbose = FALSE) {
@@ -288,22 +241,17 @@ residNAM <- function(NAM,
     if (!is.null(covs.mat)) {
         stopifnot((is.matrix(covs.mat) || isa(covs.mat, "Matrix")) && nrow(covs.mat) == nrow(NAM))
     }
-    method <- match.arg(method, choices = c("ridge", "ols"))
     
     NAM_ <- Scale(NAM, center = TRUE, scale = FALSE)
     if(!is.null(batch) || !is.null(covs.mat)){
-        if(method == "ols"){
-            NAMres <- olsNAM(NAM_, covs.mat, batch)
+        if(!is.null(partial.by) && (!is.null(batch) && !is.null(covs.mat))){
+            partial.by <- match.arg(partial.by, choices = c("batches", "covariates"))
         } else {
-            if(!is.null(partial.by) && (!is.null(batch) && !is.null(covs.mat))){
-                partial.by <- match.arg(partial.by, choices = c("batches", "covariates"))
-            } else {
-                partial.by <- NULL
-            }
-            NAMres <- ridgeNAM(NAM_, covs.mat, batch, ridges, 
-                               partial = partial.by, 
-                               verbose = verbose)
+            partial.by <- NULL
         }
+        NAMres <- ridgeNAM(NAM_, covs.mat, batch, ridges, 
+                           partial = partial.by, 
+                           verbose = verbose)
     } else {
         # pass through to generate proper results list. 
         I <- Matrix::Diagonal(n = nrow(NAM))
@@ -393,12 +341,19 @@ buildNAM <- function(data,
     stopifnot(is.numeric(max.steps) && length(max.steps) == 1 && max.steps >= min.steps)
     stopifnot(is.numeric(kurt.delta) && length(kurt.delta) == 1 && kurt.delta > 0)
     stopifnot(is.logical(verbose) && length(verbose) == 1)
+    stopifnot(data$samplem_key %in% colnames(data$obs))
     
-    f <- as.formula(paste0("~ 0 + ", data$samplem_key))    
+    # N.B.> The original approach and seems like more work... an alternative 
+    #       approach is documented in Matrix::sparse.model.matrix
+    #       colnames are already properly formatted as well, but requires `methods`
+    #       for using `as()` to coerce
+    # s <- methods::as(data$obs[,data$samplem_key], "sparseMatrix") |> Matrix::t()
+    # rownames(s) <- data$obs[[data$obs_key]]
+    f <- as.formula(paste0("~ 0 + ", data$samplem_key))
     s <- Matrix::sparse.model.matrix(f, data$obs)
     colnames(s) <- gsub(data$samplem_key, '\\1', colnames(s))
     rownames(s) <- data$obs[[data$obs_key]]
-    s <- s[, data$samplem[[data$samplem_key]]] ## Necessary? 
+    # s <- s[, data$samplem[[data$samplem_key]]] ## Necessary? # <- it is not
     
     prevmedkurt <- Inf
     ## CHECK: number of iterations matches 
@@ -465,11 +420,8 @@ buildNAM <- function(data,
 #' @param max.frac.pcs The number of PCs to calculate for SVD. The minimum is 10 
 #' and the maximum is the number of samples minus 1. \cr
 #' Default: 0.15
-#' @param method A character string specifying what method to use for batch
-#' and covariate correction. Options are: c("ridge", "ols"), Setting to "ridge"
-#' will reproduce original behavior.
-#' @param partial.by A character string. One of NULL, "batches", or "covariates". If 
-#' `method == "ridge"` then ridge penalties are only applied to those variables.
+#' @param partial.by A character string. One of NULL, "batches", or "covariates". 
+#' Ridge penalties are only applied to those variables specified..
 #' If null then all variables are penalized. Setting to "batches" will reproduce
 #' original behavior.\cr
 #' Default: NULL
@@ -504,6 +456,7 @@ buildNAM <- function(data,
 #' @export 
 nam <- function(data, y,
                 batches = NULL, 
+                donors = NULL,
                 covs = NULL, 
                 # random walk parameters passed to buildNAM
                 n.steps = NULL, 
@@ -514,7 +467,6 @@ nam <- function(data, y,
                 min.batch.kurtosis = 6,
                 max.frac.pcs = 0.15, 
                 # passed to residNAM
-                method = c("ridge", "ols"),
                 partial.by = c("batches", "covariates"),
                 ridges = NULL,
                 # general
@@ -533,11 +485,14 @@ nam <- function(data, y,
     stopifnot(is.numeric(min.steps) && length(min.steps) == 1)
     stopifnot(is.numeric(max.steps) && length(max.steps) == 1)
     stopifnot(is.numeric(kurtosis.delta) && length(kurtosis.delta) == 1)
+    # buildNAM needs this, it is implicit and needs to be made explicit in documentation
+    stopifnot(data$samplem_key %in% colnames(data$obs))
+    stopifnot(!is.numeric(data$obs[,data$samplem_key]))
+    
     # passed to qcNAM
     stopifnot(is.numeric(min.batch.kurtosis) && length(min.batch.kurtosis) == 1)
     stopifnot(is.numeric(max.frac.pcs) && length(max.frac.pcs) == 1)
     # passed to residNAM
-    method <- match.arg(method, c("ridge", "ols"))
     if(!is.null(partial.by)){
         partial.by <- match.arg(partial.by, c("batches", "covariates"))
     }
@@ -566,6 +521,15 @@ nam <- function(data, y,
         batch_vec <- dplyr::pull(data$samplem, dplyr::one_of(batches)) |> 
             as.factor()
     }
+    if(is.null(donors)){
+        group_vec <- NULL
+    } else {
+        if(!donors %in% colnames(data$samplem)){
+            stop("Could not find donors: ", donors, " in `colnames(data$samplem)`")
+        }
+        group_vec <- dplyr::pull(data$samplem, dplyr::one_of(donors)) |> 
+            as.factor()
+    }
     if (is.null(covs)) {
         cov_mat <- NULL
     } else {
@@ -585,6 +549,7 @@ nam <- function(data, y,
     if (verbose) message('QC-ing NAM')
     res_qc_nam <- qcNAM(NAM, 
                         batch = batch_vec, 
+                        donors = group_vec,
                         min.threshold = min.batch.kurtosis, 
                         verbose = verbose) 
     # y is returned in order to avoid recalculating NAM if not desired.
@@ -596,7 +561,6 @@ nam <- function(data, y,
         y <- as.numeric(y)
     }
     
-    
     ## (3) Decompose NAM 
     ## TODO: check if double brackets appropriate for multiple covs and/or batches
     ## TODO: check with Y&L if covs should be numerical and batches categorical
@@ -605,7 +569,7 @@ nam <- function(data, y,
     res_resid_nam <- residNAM(res_qc_nam$NAM, 
                               covs.mat = cov_mat, 
                               batch = batch_vec, 
-                              method = method,
+                              donors = group_vec,
                               partial.by = partial.by,
                               ridges = ridges,
                               verbose = verbose)
@@ -627,6 +591,7 @@ nam <- function(data, y,
     res[['NAM_nbhdXpc']] <- res_svd_nam$V
     res[['keptcells']] <- res_qc_nam[[2]]
     res[['_batches']] <- batch_vec
+    res[['_donors']] <- group_vec
     res[['_covariates']] <- cov_mat
     
     names(res) <- paste0(names(res), suffix)

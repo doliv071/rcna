@@ -99,7 +99,7 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 
 #' Calculate global and (optionally) local association tests.
 #' 
-#' @param NAMsvd The list output from the [nam()] function.
+#' @param NAMres The list output from the [nam()] function.
 #' @param y A vector with contrast variable value to be tested for association.
 #' @param batches_vec NULL or a factor of batches to adjust for.
 #' @param ks A numeric scalar selecting the number of components of the SVD
@@ -157,7 +157,7 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #' }
 #' 
 #' @keywords internal
-innerAssociation <- function(NAMsvd, y, batches_vec, 
+innerAssociation <- function(NAMres, 
                              ks = NULL, 
                              Nnull = 1000, 
                              force_permute_all = FALSE, 
@@ -166,9 +166,12 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
                              use.logp = FALSE,
                              seed = NULL, 
                              verbose = FALSE) {
-    stopifnot(is.list(NAMsvd))
-    stopifnot(all(c("NAM_sampleXpc", "NAM_svs", 
-                    "NAM_nbhdXpc", "_M", "_r") %in% names(NAMsvd)))
+    stopifnot(is.list(NAMres))
+    # N.B.> these are only required if supplied catch it internally?
+    # , "_batches", "_donors"
+    stopifnot(all(c("NAM_sampleXpc", "NAM_svs", "NAM_nbhdXpc", 
+                    "_M", "_r", "y") %in% names(NAMres)))
+    y <- scale(NAMres[["y"]])
     stopifnot(is.numeric(y))
     stopifnot(is.numeric(Nnull) && length(Nnull) == 1 && Nnull >= 1)
     stopifnot(is.logical(force_permute_all) && length(force_permute_all) == 1)
@@ -182,22 +185,26 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
         stopifnot(is.numeric(seed) && length(seed) == 1)
     }
     set.seed(seed)
+
+    # prep data
+    U <- NAMres[["NAM_sampleXpc"]]
+    sv <- NAMres[["NAM_svs"]]
+    V <- NAMres[["NAM_nbhdXpc"]]
+    M <- NAMres[["_M"]] 
+    r <- NAMres[["_r"]]
+    n <- length(y)
     
-    if (force_permute_all || is.null(batches_vec)) {
+    batches_vec = NAMres[["_batches"]]
+    group_vec = NAMres[["_donors"]]
+    
+    if (force_permute_all) {
         batches_vec <- rep(1L, length(y)) |> factor()
     } 
-    # prep data
-    U <- NAMsvd[["NAM_sampleXpc"]]
-    sv <- NAMsvd[["NAM_svs"]]
-    V <- NAMsvd[["NAM_nbhdXpc"]]
-    M <- NAMsvd[["_M"]] 
-    r <- NAMsvd[["_r"]]
-    y <- scale(y)
-    n <- length(y)
     
     if (is.null(ks)) {
         # unique handles situations where n < 16
-        ks <- seq(n/50, n/5, length.out = 4) |> ceiling() |> unique()
+        # N.B.: now checks all k instead of just 4 evenly spaced ks
+        ks <- seq(n/50, n/5, by = 1) |> ceiling() |> unique()
     } else if(length(ks) == 1){
         if(ks < dim(U)[2]){
             ks <- seq(1, ks, 1)
@@ -225,14 +232,20 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
     rg <- regress(ycond, k, U)
     yhat <- rg$qhat
     beta <- rg$beta
-    r2_perpc <- (beta / as.numeric(sqrt(crossprod(ycond))))**2
+    r2_perpc <- (beta / as.numeric(sqrt(crossprod(ycond))))^2
     
     # get neighborhood scores with chosen model
+    # TODO: original cna code uses the full rank matrix, while we use k rank
+    #       matrix. I think this is related to October 19, 2023 NOTICE on repo.
     ncorrs <- V[, 1:k] %*% (sqrt(sv[1:k]) * beta / n)
+    # ncorrs <- V %*% (sqrt(sv) * beta / n)
     rownames(ncorrs) <- rownames(V)
     
     # compute final p-value using Nnull null f-test p-values
-    y_null <- conditional_permutation(batches_vec, y, Nnull, 
+    y_null <- conditional_permutation(Y = y, 
+                                      B = batches_vec, 
+                                      G = group_vec,
+                                      num = Nnull, 
                                       duplicates.ok = allow_duplicate_perms, 
                                       seed = seed)
     .tmp <- apply(y_null, 2, \(z) minpStats(M, z, ks, U, r, use.logp = use.logp))
@@ -245,25 +258,29 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
                 "Consider increasing Nnull", immediate. = TRUE)
     }
     
-    # get neighborhood fdrs if requested
-    fdrs <- NULL
     fdr_5p_t <- NULL 
     fdr_10p_t <- NULL
-    
+    # get neighborhood fdrs if requested
     if (local_test) {
         if(verbose) message('computing neighborhood-level FDRs')
         Nnull <- min(1000, ncol(y_null))
         y_null <- y_null[, 1:Nnull]
         ycond_null <- scale(M %*% y_null, center = FALSE, scale = TRUE)
-        gamma_null <- crossprod(U[, 1:k], ycond_null)
+        gamma_null <- crossprod(U[, 1:k], ycond_null)  
+        # TODO: original cna code uses the full rank matrix, while we use k rank
+        #       matrix. I think this is related to October 19, 2023 NOTICE on repo.
         ncorrs_null <- abs(V[, 1:k] %*% (sqrt(sv[1:k])*(gamma_null / n)))
+        # ncorrs_null <- V %*% (sqrt(sv) * (gamma_null / n))
         # use both ncorrs and ncorrs_null to make sure we observe full range
         maxcorr <- max(c(abs(ncorrs), abs(ncorrs_null))) + sqrt(.Machine$double.eps)
         # using bins way outside the range generates NaN since both
         # NULL and data have 0 counts in the bins. However, starting at 0
         # avoids shenanigans in empirical_fdrs()
-        fdr_thresholds <- seq(0, maxcorr, maxcorr/400) # maxcorr/4
-        fdrs <- empirical_fdrs(ncorrs, ncorrs_null, fdr_thresholds) # was fdr_vals
+        n.bins <- 400
+        fdr_thresholds <- seq(0, maxcorr, maxcorr/n.bins) # from = maxcorr/4
+        fdrs <- empirical_fdrs(z = ncorrs, 
+                               znull = ncorrs_null, 
+                               thresholds = fdr_thresholds) # was fdr_vals
         # TODO: filter fdrs where num_detected = 0 ?
         # starting from last until we observe the first non-0?
         
@@ -271,12 +288,12 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
         if (min(fdrs$fdr) > 0.05) {        
             fdr_5p_t <- NULL
         } else {
-            fdr_5p_t <- min(subset(fdrs, fdr < 0.05)$threshold)        
+            fdr_5p_t <- min(subset(fdrs, fdr <= 0.05)$threshold)        
         }
         if (min(fdrs$fdr) > 0.10) {        
             fdr_10p_t <- NULL
         } else {
-            fdr_10p_t <- min(subset(fdrs, fdr < 0.1)$threshold)
+            fdr_10p_t <- min(subset(fdrs, fdr <= 0.1)$threshold)
         }
     }
     
@@ -340,6 +357,10 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #' Default: NULL
 #' @param covs A character string or vector specifying the column(s) in `samplem` 
 #' containing the covariate variables.\cr
+#' Default: NULL
+#' @param group A character sting specyfing the column in `samplem` containing
+#' a grouping variable. If batch is NULL, then Null permutations are permuted based
+#' on group. \cr
 #' Default: NULL
 #' @param n.steps Number of steps to take during the random walk. If specified then
 #' exactly this many steps is taken on the random walk. \cr
@@ -427,7 +448,9 @@ innerAssociation <- function(NAMsvd, y, batches_vec,
 #' @export 
 association <- function(data, nam.result, y, 
                         batches = NULL, 
+                        donors = NULL,
                         covs = NULL, 
+                        group = NULL,
                         n.steps = NULL, 
                         suffix = '',
                         return.nam = FALSE, 
@@ -452,15 +475,23 @@ association <- function(data, nam.result, y,
     if(!missing(data) && missing(nam.result)){
         stopifnot(all(c("samplem", "obs", "connectivities", 
                         "samplem_key", "obs_key", "N") %in% names(data)))
+        stopifnot(is.character(y) && length(y) == 1)
         if(!is.null(batches)){
             stopifnot(batches %in% colnames(data$samplem))
+        }
+        if(!is.null(donors)){
+            stopifnot(donors %in% colnames(data$samplem))
         }
         if(!is.null(covs)){
             stopifnot(all(covs %in% colnames(data$samplem)))
         }
+        # buildNAM needs this, it is implicit and needs to be made explicit in documentation
+        stopifnot(data$samplem_key %in% colnames(data$obs))
+        stopifnot(!is.numeric(data$obs[,data$samplem_key]))
     }
     # TODO: check NAs in batches and covariates.
     stopifnot(is.null(batches) || (length(batches) == 1  && is.character(batches)))
+    stopifnot(is.null(donors) || (length(donors) == 1  && is.character(donors)))
     if(!is.null(n.steps)){
         stopifnot(length(n.steps) == 1 && is.numeric(n.steps))
     }
@@ -484,6 +515,7 @@ association <- function(data, nam.result, y,
     if(missing(nam.result)){
         nam_res <- nam(data, y = y, 
                        batches = batches, 
+                       donors = donors,
                        covs = covs, 
                        filter.samples = filter.samples,
                        n.steps = n.steps, 
@@ -494,16 +526,14 @@ association <- function(data, nam.result, y,
         nam_res <- nam.result
     }
     
-    if (is.null(nam_res[['_batches']])) {
-        X <- rep(1, length(nam_res[['y']])) |> as.factor()
-    } else {
-        X <- nam_res[['_batches']]
-    }
+    # if (is.null(nam_res[['_batches']])) {
+    #     X <- rep(1, length(nam_res[['y']])) |> as.factor()
+    # } else {
+    #     X <- nam_res[['_batches']]
+    # }
     
     if (verbose) message('Perform association testing')
-    res <- innerAssociation(NAMsvd = nam_res,
-                            y = nam_res$y, 
-                            batches_vec = nam_res[['_batches']], 
+    res <- innerAssociation(NAMres = nam_res,
                             ks = Ks, 
                             Nnull = N.nulls, 
                             force_permute_all = force.permute.all, 

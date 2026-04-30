@@ -1,29 +1,51 @@
 #' Permute Y conditioned on B
 #' 
-#' @param B A factor (or object coercible via \code{split()}) of length n
-#' indicating batch membership. Permutations are performed within each level.
 #' @param Y A numeric vector of length n. The variable to permute.
-#' @param num Positive integer. Number of permutations to generate.
-#' @param seed An integer random seed for reproducibility.
+#' @param B A factor (or object coercible via \code{split()}) of length n
+#' indicating batch membership. Permutations are performed within each level of `B`.
+#' @param G A factor (or object coercible via \code{split()}) of length n
+#' indicating group membership. Permutations are performed within each level of `G`
+#' if `B` is not specified.
+#' @param num Positive integer. Number of permutations to generate. \cr
+#' Default: 1000
+#' @param seed An integer random seed for reproducibility. \cr
+#' Default: NULL
 #' @param duplicates.ok Logical. If FALSE, duplicate permutation rows are
 #' removed from the output, which may result in fewer than `num` columns.\cr
-#' Default: TRUE.
+#' Default: TRUE
 #' 
 #' @returns A numeric matrix of dimensions n × m, where `m <= num`. 
 #' Each column is one permutation of `Y` within batch levels.
 #'   
 #' @keywords internal
-conditional_permutation <- function(B, Y, num, seed = NULL, duplicates.ok = TRUE) {
+conditional_permutation <- function(Y, 
+                                    B = NULL, 
+                                    G = NULL, 
+                                    num = 1000, 
+                                    seed = NULL, 
+                                    duplicates.ok = TRUE) {
     stopifnot(is.numeric(Y))
-    stopifnot(length(B) == length(Y))
+    stopifnot(is.null(B) || length(B) == length(Y))
+    stopifnot(is.null(G) || length(G) == length(Y))
     stopifnot(is.numeric(num) && length(num) == 1 && num >= 1)
     stopifnot(is.logical(duplicates.ok) && length(duplicates.ok) == 1)
+    
     if(is.null(seed)){
         seed <- sample(1e6, 1)
     }
     set.seed(seed)
     # TODO: for certain combinations of length(Y) and B it is better to compute
     #       all permutations rather than sampling and filtering duplicates.
+
+    if(!is.null(B) && !is.null(G)){
+        # TODO: ask 
+        warning("Both batch (B) and group (G) specified. Using only group permutations.")
+        B <- G
+    } else if(is.null(B) && !is.null(G)){
+        B <- G
+    } else if(is.null(B) && is.null(G)){
+        B <- rep(1L, length(Y)) |> factor()
+    } 
     
     y_perm <- lapply(seq_len(num), function(i) {
         res <- split(seq_len(length(Y)), B) |> 
@@ -82,10 +104,10 @@ tail_counts <- function(breaks, z) {
 #' in each threshold bin.
 #' 
 #' @keywords internal
-empirical_fdrs <- function(z, znull, thresholds) {    
+empirical_fdrs <- function(z, znull, thresholds) {
     n <- length(thresholds) - 1
-    tails <- t(tail_counts(thresholds, znull)[1:n, ])
-    ranks <- t(tail_counts(thresholds, z)[1:n, ])
+    tails <- tail_counts(breaks = thresholds, z = znull)[1:n, ] |> t()
+    ranks <- tail_counts(breaks = thresholds, z = z)[1:n, ] |> t()
     # compute FDPs
     fdp <- sweep(tails, 2, ranks, '/')
     # make sure we didn't over-shoot upper bins too much
@@ -106,12 +128,12 @@ empirical_fdrs <- function(z, znull, thresholds) {
 
 #' Thoughts on calculating possible permutations ahead of time.
 #' 
-#' @param B a factor
 #' @param Y a numeric vector
+#' @param B a factor
 #'
 #' @keywords internal
 #' @noRd
-maxPerms <- function(B, Y){
+maxPerms <- function(Y, B){
     stopifnot(is.factor(B))
     stopifnot(length(B) == length(Y))
     

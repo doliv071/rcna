@@ -1,9 +1,11 @@
 #' Calculate kurtosis of the rows or columns of a sparseMatrix 
 #' 
 #' @param x A sparseMatrix for which the row or column kurtosis should be calculated
+#' 
 #' @param margin If not missing, then an integer specifying the margin over which 
 #' to calculate kurtosis 1 for rows and 2 for columns. If missing, the kurtosis of 
 #' the whole matrix is calculated. 
+#' 
 #' @param na.rm A logical controlling whether NAs should be removed from the calculation.\cr
 #' Default: FALSE
 #' 
@@ -16,10 +18,10 @@ Kurtosis <- function(x, margin, na.rm = FALSE){
     }
     stopifnot(is.matrix(x) || isa(x, "Matrix"))
     if(missing(margin)){
-        mu <- Matrix::means(x, na.rm = na.rm)
-        m2 <- Matrix::means(x^2, na.rm = na.rm)
-        m3 <- Matrix::means(x^3, na.rm = na.rm)
-        m4 <- Matrix::means(x^4, na.rm = na.rm)
+        mu <- Matrix::mean(x, na.rm = na.rm)
+        m2 <- Matrix::mean(x^2, na.rm = na.rm)
+        m3 <- Matrix::mean(x^3, na.rm = na.rm)
+        m4 <- Matrix::mean(x^4, na.rm = na.rm)
     } else if(margin == 1){
         mu <- Matrix::rowMeans(x, na.rm = na.rm)
         m2 <- Matrix::rowMeans(x^2, na.rm = na.rm)
