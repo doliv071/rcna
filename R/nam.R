@@ -168,7 +168,7 @@ ridgeNAM <- function(NAM,
         L <- Matrix::Diagonal(n = ncol(X))
     } else {
         warning("no batch or cov.mat supplied.", immediate. = TRUE)
-        res <- list(NAM_ = NAM, 
+        res <- list(NAM = NAM, 
                     M = I,
                     r = 0)
         return(res)
@@ -191,13 +191,13 @@ ridgeNAM <- function(NAM,
     lambda <- ridges[which.min(gcv)]
     H <- X %*% Matrix::solve(Matrix::crossprod(X, X) + lambda * L, Matrix::t(X))
     M <- I - H
-    NAM_ <- M %*% NAM
-    colnames(NAM_) <- colnames(NAM)
-    rownames(NAM_) <- rownames(NAM)
-    kurtoses <- batchKurtosis(NAM_, batch) |> median()
+    NAM_r <- M %*% NAM
+    colnames(NAM_r) <- colnames(NAM)
+    rownames(NAM_r) <- rownames(NAM)
+    kurtoses <- batchKurtosis(NAM_r, batch) |> median()
     if(verbose) message("with ridge ", lambda, " median batch kurtosis = ", kurtoses)
     dfs <- dfs + sum(Matrix::diag(H))
-    return(list(NAM_ = NAM_, 
+    return(list(NAM = NAM_r, 
                 M = M,
                 r = dfs))
 }
@@ -220,8 +220,10 @@ ridgeNAM <- function(NAM,
 #' Default NULL
 #' @param donors STUB
 #' @note assumes that covariates are not categorical
+#' @note If both batch and cov.mat are null, this is a passthrough for centering
+#' and scaling the nam.
 #' 
-#' @returns A list containing the residuals NAM (NAM_), the annihilator matrix 
+#' @returns A list containing the residuals NAM (NAM), the annihilator matrix 
 #' used to remove unwanted effects (M), and the approximate degrees of freedom
 #' consumed (r).
 #' 
@@ -242,24 +244,25 @@ residNAM <- function(NAM,
         stopifnot((is.matrix(covs.mat) || isa(covs.mat, "Matrix")) && nrow(covs.mat) == nrow(NAM))
     }
     
-    NAM_ <- Scale(NAM, center = TRUE, scale = FALSE)
+    NAM <- Scale(NAM, center = TRUE, scale = FALSE)
     if(!is.null(batch) || !is.null(covs.mat)){
         if(!is.null(partial.by) && (!is.null(batch) && !is.null(covs.mat))){
             partial.by <- match.arg(partial.by, choices = c("batches", "covariates"))
         } else {
             partial.by <- NULL
         }
-        NAMres <- ridgeNAM(NAM_, covs.mat, batch, ridges, 
+        NAMres <- ridgeNAM(NAM, covs.mat, batch, ridges, 
                            partial = partial.by, 
                            verbose = verbose)
     } else {
         # pass through to generate proper results list. 
         I <- Matrix::Diagonal(n = nrow(NAM))
-        NAMres <- list(NAM_ = NAM, 
+        NAMres <- list(NAM = NAM, 
                        M = I,
                        r = 0)
     }
-    NAMres$NAM_ <- Scale(NAMres$NAM_, center = FALSE, scale = TRUE)
+    # TODO: check if this matters. ddof = 0 in order try matching python implementation
+    NAMres$NAM <- Scale(NAMres$NAM, center = FALSE, scale = TRUE, ddof = 0L)
     return(NAMres)
 }
 
@@ -283,7 +286,12 @@ svdNAM <- function(NAM, n.pcs = NULL) {
     stopifnot(is.matrix(NAM) || isa(NAM, "Matrix"))
     
     if (is.null(n.pcs) || n.pcs > .5 * min(dim(NAM))) {
+        # NAM <- Scale(NAM, center = TRUE, scale = TRUE, ddof = 0L)
         svd_res <- svd(NAM)
+        # this is how the original python code handled it
+        # it is the same as just svd, I checked
+        # svd_res <- svd(Matrix::tcrossprod(NAM))
+        # svd_res$v <- Matrix::t(Matrix::t(Matrix::t(NAM) %*% svd_res$u) / sqrt(svd_res$d))
         n.pcs <- min(dim(NAM))
     } else {
         svd_res <- RSpectra::svds(NAM, k = n.pcs)
@@ -576,12 +584,12 @@ nam <- function(data, y,
     if (verbose) message('Decomposing NAM')
     n_pcs <- max(10, ceiling(max.frac.pcs * nrow(data$samplem)))
     n_pcs <- min(n_pcs, nrow(data$samplem) - 1) ## make sure you don't compute all SVs    
-    res_svd_nam <- svdNAM(res_resid_nam$NAM_, n.pcs = n_pcs)
+    res_svd_nam <- svdNAM(res_resid_nam$NAM, n.pcs = n_pcs)
     
     res[['y']] <- y
     res[['raw.NAM.T']] <- Matrix::t(NAM)
     res[['qc.NAM.T']] <- Matrix::t(res_qc_nam$NAM)
-    res[['resid.NAM.T']] <- Matrix::t(res_resid_nam$NAM_)
+    res[['resid.NAM.T']] <- Matrix::t(res_resid_nam$NAM)
     res[['_M']] <- res_resid_nam$M
     # TODO rename to df (degrees of freedom)
     res[['_r']] <- res_resid_nam$r

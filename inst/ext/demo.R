@@ -45,6 +45,8 @@ use_virtualenv("~/Git/cna-rcna-test/cna_env/", required = TRUE)
 builtins <- import_builtins()
 # py_run_string("import vars")
 source_python("~/Git/cna-rcna-test/test.py")
+
+
 connectivities <- d$obsp["connectivities"]
 connectivities <- as(connectivities, "CsparseMatrix")
 
@@ -69,7 +71,7 @@ demo <- list(
 saveRDS(demo, "inst/ext/demo_data.rds")
 
 p <- builtins$vars(p)
-saveRDS(p, "inst/ext/demo_result.rds")
+saveRDS(p, "inst/ext/demo_result_nocov_nobatch.rds")
 
 
 
@@ -81,26 +83,132 @@ devtools::document(".")
 
 rcna_demo <- readRDS("inst/ext/demo_data.rds")
 
+a <- nam(data = rcna_demo, y = "case")
+b <- association(rcna_demo, nam.result = a, y = "case")
 
-data = rcna_demo
-data$obs$id <- as.factor(data$obs$id)
+p <- readRDS("inst/ext/demo_result_nocov_nobatch.rds")
 
-res <- list()
-batch_vec <- NULL
-group_vec <- NULL
-cov_mat <- NULL
-n.steps = NULL
-min.steps = 3
-max.steps = 15L
-kurt.delta = 3
-verbose = FALSE
+# only attributes differ
+all.equal(as(as.matrix(p$M), "CsparseMatrix"), 
+          as(as(a$`_M`, "CsparseMatrix"), "dsCMatrix"))
 
-# c("y", "raw.NAM.T", "qc.NAM.T", "resid.NAM.T", "_M", "_r", "NAM_sampleXpc", 
-#   "NAM_svs", "NAM_varexp", "NAM_nbhdXpc", "keptcells")
+p$namresid |> as.matrix() |> as("sparseMatrix") |> dim()
+Matrix::t(a$resid.NAM.T) |> dim()
 
-NAM <- buildNAM(rcna_demo)
-
-nam(data = rcna_demo, y = "case")
-association(rcna_demo, y = "case")
+# 50 x 10000 sparse Matrix of class "dgCMatrix"
+all.equal(as(as.matrix(p$namresid), "sparseMatrix"), 
+          # 50 x 10000 sparse Matrix of class "dgCMatrix"
+          Matrix::t(a$resid.NAM.T))
 
 
+#################################
+# because things seem to diverge quickly, going through step by step :/
+##############
+library(reticulate)
+library(HSSRscripts)
+devtools::document(".")
+use_virtualenv("~/Git/cna-rcna-test/cna_env/", required = TRUE)
+builtins <- import_builtins()
+# py_run_string("import vars")
+source_python("~/Git/cna-rcna-test/test.py")
+rcna_demo <- readRDS("inst/ext/demo_data.rds")
+
+#
+### checking diffusion step...
+#
+diffuse_step1 <- d1 |> as.matrix() |> as("CsparseMatrix")
+
+
+f <- as.formula(paste0("~ 0 + ", rcna_demo$samplem_key))
+s <- Matrix::sparse.model.matrix(f, rcna_demo$obs)
+colnames(s) <- gsub(rcna_demo$samplem_key, '\\1', colnames(s))
+rownames(s) <- rcna_demo$obs[[rcna_demo$obs_key]]
+diffuseStep <- function(a, s) {
+    stopifnot((isa(a, "Matrix") || is.matrix(a)) && nrow(a) == ncol(a))
+    stopifnot(isa(s, "Matrix") || is.matrix(s))
+    stopifnot(nrow(s) == ncol(a))
+    
+    degrees <- Matrix::colSums(a) + 1
+    s_norm <- s / degrees
+    res <- (a %*% s_norm) + s_norm
+    return(res) 
+}
+
+rdiffuse_s1 <- s <- diffuseStep(rcna_demo$connectivities, s)
+
+all.equal(rdiffuse_s1, diffuse_step1)
+
+rdiffuse_s2 <- s <- diffuseStep(rcna_demo$connectivities, s)
+
+diffuse_step2 <- d2 |> as.matrix() |> as("CsparseMatrix")
+
+all.equal(rdiffuse_s2, diffuse_step2)
+
+s <- diffuseStep(rcna_demo$connectivities, s)
+rdiffuse_s4 <- s <- diffuseStep(rcna_demo$connectivities, s)
+
+diffuse_step4 <- d4 |> as.matrix() |> as("CsparseMatrix")
+
+all.equal(rdiffuse_s4, diffuse_step4)
+
+s <- diffuseStep(rcna_demo$connectivities, s)
+s <- diffuseStep(rcna_demo$connectivities, s)
+s <- diffuseStep(rcna_demo$connectivities, s)
+rdiffuse_s8 <- s <- diffuseStep(rcna_demo$connectivities, s)
+
+diffuse_step8 <- d8 |> as.matrix() |> as("CsparseMatrix")
+
+all.equal(rdiffuse_s8, diffuse_step8)
+
+#### diffusion steps match exactly.
+
+#
+### checking nam step...both took 4 steps
+#
+pysnorm <- as.matrix(snorm) |> as("CsparseMatrix")
+
+rsnorm <- buildNAM(rcna_demo)
+
+all.equal(pysnorm, rsnorm)
+# [1] TRUE
+
+#### nam steps match exactly.
+
+#
+### checking qcnam step...
+#
+
+# NO BATCH
+pyqc_nam <- qc_nam |> as.matrix() |> as("CsparseMatrix")
+rqcnam <- buildNAM(rcna_demo) |> qcNAM()
+
+all.equal(pyqc_nam, rqcnam$NAM)
+# TRUE
+
+# TODO: WITH BATCH
+
+
+#
+### checking svdnam step...
+#
+
+svd_nam[[1]]
+rnam <- buildNAM(rcna_demo)
+resid_rnam <- residNAM(rnam)
+rsvd_nam <- svdNAM(resid_rnam$NAM)
+all.equal(abs(as.matrix(svd_nam[[1]])), abs(as.matrix(rsvd_nam[[1]])))
+# TRUE (after much painful bug finding)
+
+#### svd steps match
+
+#
+### checking  step...
+#
+
+
+
+
+
+
+
+    

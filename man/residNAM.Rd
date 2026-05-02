@@ -37,7 +37,7 @@ set of ridges centered on `svd(X)$d[1]^2` is used.\cr
 Default NULL}
 }
 \value{
-A list containing the residuals NAM (NAM_), the annihilator matrix 
+A list containing the residuals NAM (NAM), the annihilator matrix 
 used to remove unwanted effects (M), and the approximate degrees of freedom
 consumed (r).
 }
@@ -46,5 +46,8 @@ remove batch effects (including continuous covariates)
 }
 \note{
 assumes that covariates are not categorical
+
+If both batch and cov.mat are null, this is a passthrough for centering
+and scaling the nam.
 }
 \keyword{internal}

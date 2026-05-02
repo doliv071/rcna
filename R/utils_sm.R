@@ -73,19 +73,27 @@ propTable <- function(x, margin){
 #' 
 #' @param x A sparseMatrix
 #' @param center A boolean, should x be centered
+#' Default: TRUE
 #' @param scale A boolean, should x be scaled
+#' Default: TRUE
+#' @param ddof An integer, either 0 or 1 specifying the denominator degrees of
+#' freedom. Use 1L for the n - 1 denominator and 0L for n denominator.
+#' Default: 1L
+#' 
+#' @note NAs are omitted as in [base::scale()]
 #' 
 #' @returns A dense sparseMatrix ("dgeMatrix")
 #'
 #' @keywords internal
-Scale <- function(x, center = TRUE, scale = TRUE){
+Scale <- function(x, center = TRUE, scale = TRUE, ddof = 1L){
     stopifnot(isa(x, "Matrix") || is.matrix(x))
+    stopifnot(any(ddof == c(0L, 1L)))
     if(center){
-        centers <- Matrix::colMeans(x)
+        centers <- Matrix::colMeans(x, na.rm = TRUE)
         x <- Matrix::t(Matrix::t(x) - centers)
     }
     if(scale){
-        scales <- sqrt(Matrix::colSums(x^2) / (nrow(x) - 1))
+        scales <- sqrt(Matrix::colSums(x^2, na.rm = TRUE) / (nrow(x) - ddof))
         x <- Matrix::t(Matrix::t(x) / scales)
     }
     return(x)

@@ -4,19 +4,28 @@
 \alias{Scale}
 \title{A scale function for sparseMatrix}
 \usage{
-Scale(x, center = TRUE, scale = TRUE)
+Scale(x, center = TRUE, scale = TRUE, ddof = 1L)
 }
 \arguments{
 \item{x}{A sparseMatrix}
 
-\item{center}{A boolean, should x be centered}
+\item{center}{A boolean, should x be centered
+Default: TRUE}
 
-\item{scale}{A boolean, should x be scaled}
+\item{scale}{A boolean, should x be scaled
+Default: TRUE}
+
+\item{ddof}{An integer, either 0 or 1 specifying the denominator degrees of
+freedom. Use 1L for the n - 1 denominator and 0L for n denominator.
+Default: 1L}
 }
 \value{
 A dense sparseMatrix ("dgeMatrix")
 }
 \description{
 A scale function for sparseMatrix
+}
+\note{
+NAs are omitted as in [base::scale()]
 }
 \keyword{internal}
