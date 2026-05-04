@@ -42,6 +42,9 @@ calcStats <- function(yhat, ycond, k, n, r, log.p = FALSE) {
     stopifnot(is.numeric(r) && length(r) == 1 && r >= 0)
     stopifnot(is.logical(log.p) && length(log.p) == 1)
     
+    # TODO: python code uses (yhat - ycond).dot(yhat - ycond) and ycond.dot(ycond)
+    #       since yhat and ycond are both vectors the result is scalar and it 
+    #       doesn't matter...but maybe crossprod is less efficient
     ssefull <- crossprod(yhat - ycond)
     ssered <- crossprod(ycond)
     deltasse <-  ssered - ssefull
@@ -84,6 +87,8 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
     
     n <- length(y)
     zcond <- M %*% y
+    # TODO: check this is the same as t(t(zcond) / std(zcond))
+    #       probably need to use either Scale or do it by hand to get ddof = 0
     zcond <- scale(zcond, center = FALSE, scale = TRUE)
     qhats <- lapply(ks, function(k) regress(zcond, k, U)$qhat)
     .tmp <- lapply(seq_along(ks), function(i) calcStats(qhats[[i]], zcond, ks[i], 
@@ -170,7 +175,7 @@ innerAssociation <- function(NAMres,
     # N.B.> these are only required if supplied catch it internally?
     # , "_batches", "_donors"
     stopifnot(all(c("NAM_sampleXpc", "NAM_svs", "NAM_nbhdXpc", 
-                    "_M", "_r", "y") %in% names(NAMres)))
+                    "_M", "_r", "y", "resid.NAM.T") %in% names(NAMres)))
     y <- scale(NAMres[["y"]])
     stopifnot(is.numeric(y))
     stopifnot(is.numeric(Nnull) && length(Nnull) == 1 && Nnull >= 1)
@@ -193,6 +198,7 @@ innerAssociation <- function(NAMres,
     M <- NAMres[["_M"]] 
     r <- NAMres[["_r"]]
     n <- length(y)
+    NAM_resid <- Matrix::t(NAMres[["resid.NAM.T"]])
     
     batches_vec = NAMres[["_batches"]]
     group_vec = NAMres[["_donors"]]
@@ -204,7 +210,11 @@ innerAssociation <- function(NAMres,
     if (is.null(ks)) {
         # unique handles situations where n < 16
         # N.B.: now checks all k instead of just 4 evenly spaced ks
-        ks <- seq(n/50, n/5, by = 1) |> ceiling() |> unique()
+        # ks <- seq(n/50, n/5, by = 1) |> ceiling() |> unique()
+        # TODO: ask Yakir for rationale for this
+        incr <- max(as.integer(0.02 * n), 1)
+        maxnpcs <- max(min(4 * incr, as.integer(n / 5)), 1)
+        ks <- seq(from = incr, to = maxnpcs, by = incr)
     } else if(length(ks) == 1){
         if(ks < dim(U)[2]){
             ks <- seq(1, ks, 1)
@@ -228,7 +238,9 @@ innerAssociation <- function(NAMres,
     }
     
     # compute coefficients and r2 with chosen model
-    ycond <- scale(M %*% y, center = FALSE, scale = TRUE)
+    ycond <- M %*% y
+    # TODO: check this is the same as t(t(ycond) / sd(ycond))
+    ycond <- scale(ycond, center = FALSE, scale = TRUE)
     rg <- regress(ycond, k, U)
     yhat <- rg$qhat
     beta <- rg$beta
@@ -237,11 +249,17 @@ innerAssociation <- function(NAMres,
     # get neighborhood scores with chosen model
     # TODO: original cna code uses the full rank matrix, while we use k rank
     #       matrix. I think this is related to October 19, 2023 NOTICE on repo.
-    ncorrs <- V[, 1:k] %*% (sqrt(sv[1:k]) * beta / n)
-    # ncorrs <- V %*% (sqrt(sv) * beta / n)
-    rownames(ncorrs) <- rownames(V)
+    # ncorrs <- V[, 1:k] %*% (sqrt(sv[1:k]) * beta / n)
+    # rownames(ncorrs) <- rownames(V)
     
+    # This is the python version, it requires NAM_resid but since we're using the
+    # full data instead of subset k, we don't need to do the projection from 
+    # the svd.
+    # TODO: something downstream doesn't like the sparse matrix hence not a Matrix here
+    ncorrs <- Matrix::colMeans(y[,1] * NAM_resid) |> matrix(ncol = 1)
+
     # compute final p-value using Nnull null f-test p-values
+    # TODO: not sure group level is working yet.
     y_null <- conditional_permutation(Y = y, 
                                       B = batches_vec, 
                                       G = group_vec,
@@ -265,12 +283,18 @@ innerAssociation <- function(NAMres,
         if(verbose) message('computing neighborhood-level FDRs')
         Nnull <- min(1000, ncol(y_null))
         y_null <- y_null[, 1:Nnull]
-        ycond_null <- scale(M %*% y_null, center = FALSE, scale = TRUE)
-        gamma_null <- crossprod(U[, 1:k], ycond_null)  
+        ycond_null <- M %*% y_null
+        # Need to check Scale w/ ddof = 0
+        ycond_null <- scale(ycond_null, center = FALSE, scale = TRUE)
+        # gamma_null <- crossprod(U[, 1:k], ycond_null)
         # TODO: original cna code uses the full rank matrix, while we use k rank
         #       matrix. I think this is related to October 19, 2023 NOTICE on repo.
-        ncorrs_null <- abs(V[, 1:k] %*% (sqrt(sv[1:k])*(gamma_null / n)))
-        # ncorrs_null <- V %*% (sqrt(sv) * (gamma_null / n))
+        # # ncorrs_null <- abs(V[, 1:k] %*% (sqrt(sv[1:k])*(gamma_null / n)))
+        # TODO: Error in max(c(abs(ncorrs), abs(ncorrs_null))) : 
+        #           invalid 'type' (list) of argument
+        ncorrs_null <- abs(Matrix::crossprod(NAM_resid, ycond_null) / n) |> 
+            as.matrix()
+        
         # use both ncorrs and ncorrs_null to make sure we observe full range
         maxcorr <- max(c(abs(ncorrs), abs(ncorrs_null))) + sqrt(.Machine$double.eps)
         # using bins way outside the range generates NaN since both
@@ -525,6 +549,14 @@ association <- function(data, nam.result, y,
     } else {
         nam_res <- nam.result
     }
+    
+    ### TODO: remove 0 variance columns (cells)
+    # # filter samples and drop any columns that then have zero variance
+    # NAM = NAM[filter_samples]
+    # zero_variance_col_ix = np.where(NAM.std(axis=0) == 0)[0]
+    # nz_ix = np.flatnonzero(kept)
+    # kept[nz_ix[zero_variance_col_ix]] = False
+    # NAM = NAM.drop(columns=NAM.columns[zero_variance_col_ix])
     
     # if (is.null(nam_res[['_batches']])) {
     #     X <- rep(1, length(nam_res[['y']])) |> as.factor()

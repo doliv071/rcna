@@ -31,7 +31,7 @@ reducedDim(sce_obj, "X_umap") |> as.data.frame() |>
 # Not easy to do gradient fill for violins
 reducedDim(sce_obj, "X_umap") |> as.data.frame() |> 
     cbind(leiden = as.factor(sce_obj$leiden), 
-                     male_coef = sce_obj$male_coef) |> 
+          male_coef = sce_obj$male_coef) |> 
     ggplot(aes(x = leiden, y = male_coef, color = leiden)) + 
     geom_violin() +
     theme_classic()
@@ -185,8 +185,7 @@ rqcnam <- buildNAM(rcna_demo) |> qcNAM()
 all.equal(pyqc_nam, rqcnam$NAM)
 # TRUE
 
-# TODO: WITH BATCH
-
+# qc works for both batch and batch+covs
 
 #
 ### checking svdnam step...
@@ -201,9 +200,116 @@ all.equal(abs(as.matrix(svd_nam[[1]])), abs(as.matrix(rsvd_nam[[1]])))
 
 #### svd steps match
 
+
+#########################
+# NAM processing matches exactly
+###
+
 #
-### checking  step...
+### checking association step...
 #
+rnam <- nam(rcna_demo, y = "case")
+
+
+r1 <- sweep(rnam$resid.NAM.T, 2, scale(rnam$y), "*") |>  Matrix::colMeans()
+r2 <- Matrix::colMeans(rnam$resid.NAM.T) * scale(rnam$y)[,1]
+r3 <- Matrix::colMeans(scale(rnam$y) * Matrix::t(rnam$resid.NAM.T)) |> matrix(ncol = 1)
+all.equal(r1, r2)
+V <- rnam$NAM_nbhdXpc
+sv <- rnam$NAM_svs
+ncorrs <- V[, 1:k] %*% (sqrt(sv[1:k]) * beta / n)
+
+rass <- association(rcna_demo, y = "case")
+
+# global p is identical
+identical(rass$p, p$p)
+# TRUE
+
+identical(rass$k, p$k)
+# TRUE
+
+all.equal(as.numeric(rass$yhat), as.numeric(p$yresid_hat))
+# TRUE
+
+all.equal(as.numeric(rass$ycond), as.numeric(p$yresid))
+# TRUE
+
+all.equal(as.numeric(rass$ncorrs), as.numeric(p$ncorrs))
+# "Mean relative difference: 0.001598857"
+
+all.equal(as.numeric(rass$r2_perpc), as.numeric(p$r2_perpc))
+# TRUE
+
+all.equal(p$fdr_5p_t, rass$fdr_5p_t)
+
+p$fdrs$threshold
+
+data.frame(py.thresh = p$fdrs$threshold, r.thresh = rass$fdrs$threshold[100:399])
+
+plot(p$fdrs$threshold, rass$fdrs$threshold[100:399])
+abline(0,1)
+
+plot(p$fdrs$fdr, rass$fdrs$fdr[100:399])
+abline(0,1)
+
+plot(p$fdrs$num_detected, rass$fdrs$num_detected[100:399])
+abline(0,1)
+
+# these are always random
+all.equal(rass$minps_null, as.numeric(p$nullminps))
+plot(rass$minps_null, as.numeric(p$nullminps))
+
+
+test.iters <- parallel::mclapply(1:100, \(i) {
+    suppressWarnings(
+        association(nam.result = rnam, y = "case", verbose = FALSE)$fdrs$fdr
+    )
+}, mc.cores = 12)
+
+test.mat <- do.call(cbind, test.iters)
+
+all.equal(test.mat[,1], test.mat[,2])
+
+cor.p <- apply(test.mat[100:399,], 2, \(x){ 
+    data.frame(cor = cor(p$fdrs$fdr, x), 
+               mae = mean(abs(p$fdrs$fdr - x )))
+}) |> do.call(what = rbind)
+
+plot(cor.p)
+
+
+##################################################
+# One more time with batch and covariates 
+######
+library(reticulate)
+library(HSSRscripts)
+devtools::document(".")
+use_virtualenv("~/Git/cna-rcna-test/cna_env/", required = TRUE)
+builtins <- import_builtins()
+# py_run_string("import vars")
+source_python("~/Git/cna-rcna-test/test.py")
+rcna_demo <- readRDS("inst/ext/demo_data.rds")
+
+
+rcna_demo$samplem$male <- as.numeric(rcna_demo$samplem$male)
+rass2 <- association(rcna_demo, y = "case", batches = "batch")
+rnam2 <- nam(data = rcna_demo, y = "case", batches = "batch")
+
+qc.NAM <- Matrix::t(rnam2$qc.NAM.T)
+qc_nam <- qc_nam |> as.matrix() |> as("CsparseMatrix")
+all.equal(qc.NAM, qc_nam)
+
+prn <- p2$namresid |> as.matrix() |> as("Matrix")
+rrn <- Matrix::t(rnam2$resid.NAM.T)
+all.equal(prn, rrn)
+plot(prn[,1], rrn[,1])
+
+
+plot(rass2$fdrs$fdr[100:399], p2$fdrs$fdr)
+abline(0,1)
+
+plot(rass2$fdrs$threshold[100:399], p2$fdrs$threshold)
+abline(0,1)
 
 
 
@@ -211,4 +317,4 @@ all.equal(abs(as.matrix(svd_nam[[1]])), abs(as.matrix(rsvd_nam[[1]])))
 
 
 
-    
+
