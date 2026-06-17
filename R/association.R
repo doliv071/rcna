@@ -8,7 +8,7 @@
 #'
 #' @keywords internal
 regress <- function(q, k, U) {
-    stopifnot(is.numeric(q))
+    stopifnot(is.numeric(q) || isa(q, "Matrix"))
     stopifnot(is.numeric(k) && length(k) == 1 && k >= 1 && k <= ncol(U))
     stopifnot(is.matrix(U) || isa(U, "Matrix"))
     stopifnot(length(q) == nrow(U))
@@ -16,8 +16,7 @@ regress <- function(q, k, U) {
     Xpc <- U[, 1:k]
     beta <- crossprod(Xpc, q)
     qhat <- Xpc %*% beta
-    res <- list(qhat = qhat,
-                beta = beta)
+    res <- list(qhat = qhat, beta = beta)
     return(res)
 }
 
@@ -29,34 +28,23 @@ regress <- function(q, k, U) {
 #' @param k Number of components of U to test.
 #' @param n The number of samples.
 #' @param r degrees of freedom consumed by batch correction in [residNAM()].
-#' @param log.p A logical whether the log transformed p-value value should be 
-#' calculated.\cr
 #' Default: FALSE
 #' 
 #' @returns A list containing p-value and r^2 for the F-test
 #' 
 #' @keywords internal
-calcStats <- function(yhat, ycond, k, n, r, log.p = FALSE) {
+calcStats <- function(yhat, ycond, k, n, r) {
     stopifnot(is.numeric(k) && length(k) == 1 && k >= 1)
     stopifnot(is.numeric(n) && length(n) == 1 && n > 1 + r + k)
     stopifnot(is.numeric(r) && length(r) == 1 && r >= 0)
-    stopifnot(is.logical(log.p) && length(log.p) == 1)
     
-    # TODO: python code uses (yhat - ycond).dot(yhat - ycond) and ycond.dot(ycond)
-    #       since yhat and ycond are both vectors the result is scalar and it 
-    #       doesn't matter...but maybe crossprod is less efficient
     ssefull <- crossprod(yhat - ycond)
     ssered <- crossprod(ycond)
     deltasse <-  ssered - ssefull
     f <- (deltasse / k) / (ssefull / n)
-    if(!log.p){
-        p <- pf(f, k, n-(1+r+k), lower.tail = FALSE)
-    } else {
-        # N.B. this is an approximation of 1-p when p gets too small to calculate
-        #      in 64bit space? For small f/df1/df2 the drift is noticeable though
-        p <- -pf(f, k, n-(1+r+k), log.p = TRUE)
-    }
-    r2 <- 1 - ssefull/ssered
+    f <- as.vector(f)
+    p <- stats::pf(f, k, n-(1+r+k), lower.tail = FALSE)
+    r2 <- as.vector(1 - ssefull/ssered)
     res <- list(p = p, r2 = r2)
     return(res)
 }
@@ -70,29 +58,23 @@ calcStats <- function(yhat, ycond, k, n, r, log.p = FALSE) {
 #' (U returned by [svdNAM])
 #' @param r the degrees of freedom already consumed by batch correction 
 #' (r returned by [residNAM])
-#' @param use.logp A logical whether the log transformed p-value value should be 
-#' calculated.\cr
 #' Default: FALSE
 #' 
 #' @returns A list containing the k, p, and r^2 for k which produces the minimum
 #' p-value.
 #' 
 #' @keywords internal
-minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
+minpStats <- function(M, y, ks, U, r) {
     stopifnot(is.matrix(M) || isa(M, "Matrix"))
     stopifnot(is.numeric(y))
     stopifnot(nrow(M) == ncol(M) && nrow(M) == length(y))
     stopifnot(is.numeric(ks) && all(ks >= 1) && all(ks <= ncol(U)))
-    stopifnot(is.logical(use.logp) && length(use.logp) == 1)
     
     n <- length(y)
     zcond <- M %*% y
-    # TODO: check this is the same as t(t(zcond) / std(zcond))
-    #       probably need to use either Scale or do it by hand to get ddof = 0
-    zcond <- scale(zcond, center = FALSE, scale = TRUE)
+    zcond <- Scale(zcond, center = FALSE, scale = TRUE, method = "sd")
     qhats <- lapply(ks, function(k) regress(zcond, k, U)$qhat)
-    .tmp <- lapply(seq_along(ks), function(i) calcStats(qhats[[i]], zcond, ks[i], 
-                                                        n, r, log.p = use.logp))
+    .tmp <- lapply(seq_along(ks), function(i) calcStats(qhats[[i]], zcond, ks[i], n, r))
     ps <- vapply(.tmp, \(x) x$p, numeric(1))
     r2s <- vapply(.tmp, \(x) x$r2, numeric(1))
     k_ <- which.min(ps)
@@ -105,8 +87,6 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #' Calculate global and (optionally) local association tests.
 #' 
 #' @param NAMres The list output from the [nam()] function.
-#' @param y A vector with contrast variable value to be tested for association.
-#' @param batches_vec NULL or a factor of batches to adjust for.
 #' @param ks A numeric scalar selecting the number of components of the SVD
 #' to test for global association. If null 4 values for k are selected between
 #' n/50 and n/5. \cr
@@ -125,9 +105,6 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #' @param local_test A logical, whether or not to perform local test of neighborhood
 #' correlations. \cr
 #' Default: TRUE
-#' @param use.logp A logical whether the log transformed p-value value should be 
-#' calculated. Set to TRUE if your FDRs are incredibly small or 0. \cr
-#' Default: FALSE
 #' @param seed A numeric seed to set. Set if you want to repeat exact permutations
 #' as a previous run. If NULL, a random seed is chosen. \cr
 #' Default: NULL
@@ -135,7 +112,6 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #' Default: FALSE
 #'
 #' @returns A named list with the following elements:
-#' \describe{
 #'   \item{p}{Empirical global association p-value from permutation test.}
 #'   \item{minps_null}{Numeric vector of length \code{Nnull} containing the
 #'     minimum permutation p-values from the null distribution.}
@@ -159,7 +135,6 @@ minpStats <- function(M, y, ks, U, r, use.logp = FALSE) {
 #'   \item{nullr2_mean}{Mean R-squared across null permutations.}
 #'   \item{nullr2_std}{Standard deviation of R-squared across null permutations.}
 #'   \item{seed}{The integer seed used for permutations, for reproducibility.}
-#' }
 #' 
 #' @keywords internal
 innerAssociation <- function(NAMres, 
@@ -168,21 +143,20 @@ innerAssociation <- function(NAMres,
                              force_permute_all = FALSE, 
                              allow_duplicate_perms = TRUE,
                              local_test = TRUE, 
-                             use.logp = FALSE,
                              seed = NULL, 
                              verbose = FALSE) {
     stopifnot(is.list(NAMres))
     # N.B.> these are only required if supplied catch it internally?
-    # , "_batches", "_donors"
+    # , "batches", "donors"
     stopifnot(all(c("NAM_sampleXpc", "NAM_svs", "NAM_nbhdXpc", 
-                    "_M", "_r", "y", "resid.NAM.T") %in% names(NAMres)))
-    y <- scale(NAMres[["y"]])
+                    "M", "r", "y", "resid.NAM.T") %in% names(NAMres)))
+    y <- Scale(matrix(NAMres[["y"]], ncol = 1), ddof = 0, method = "sd")
+
     stopifnot(is.numeric(y))
     stopifnot(is.numeric(Nnull) && length(Nnull) == 1 && Nnull >= 1)
     stopifnot(is.logical(force_permute_all) && length(force_permute_all) == 1)
     stopifnot(is.logical(allow_duplicate_perms) && length(allow_duplicate_perms) == 1)
     stopifnot(is.logical(local_test) && length(local_test) == 1)
-    stopifnot(is.logical(use.logp) && length(use.logp) == 1)
     
     if (is.null(seed)) {
         seed <- sample(1e6, 1)
@@ -190,18 +164,18 @@ innerAssociation <- function(NAMres,
         stopifnot(is.numeric(seed) && length(seed) == 1)
     }
     set.seed(seed)
-
+    
     # prep data
     U <- NAMres[["NAM_sampleXpc"]]
     sv <- NAMres[["NAM_svs"]]
     V <- NAMres[["NAM_nbhdXpc"]]
-    M <- NAMres[["_M"]] 
-    r <- NAMres[["_r"]]
+    M <- NAMres[["M"]] 
+    r <- NAMres[["r"]]
     n <- length(y)
     NAM_resid <- Matrix::t(NAMres[["resid.NAM.T"]])
     
-    batches_vec = NAMres[["_batches"]]
-    group_vec = NAMres[["_donors"]]
+    batches_vec <- NAMres[["batches"]]
+    group_vec <- NAMres[["donors"]]
     
     if (force_permute_all) {
         batches_vec <- rep(1L, length(y)) |> factor()
@@ -226,7 +200,7 @@ innerAssociation <- function(NAMres,
     } 
     
     # get non-null f-test p-value
-    mp <- minpStats(M, y, ks, U, r, use.logp = use.logp)
+    mp <- minpStats(M, y, ks, U, r)
     k <- mp$k 
     p <- mp$p 
     r2 <- mp$r2
@@ -239,41 +213,34 @@ innerAssociation <- function(NAMres,
     
     # compute coefficients and r2 with chosen model
     ycond <- M %*% y
-    # TODO: check this is the same as t(t(ycond) / sd(ycond))
-    ycond <- scale(ycond, center = FALSE, scale = TRUE)
+    ycond <- Scale(ycond, center = FALSE, scale = TRUE, method = "sd")
     rg <- regress(ycond, k, U)
     yhat <- rg$qhat
     beta <- rg$beta
     r2_perpc <- (beta / as.numeric(sqrt(crossprod(ycond))))^2
+    r2_perpc <- as.vector(r2_perpc)
     
-    # get neighborhood scores with chosen model
-    # TODO: original cna code uses the full rank matrix, while we use k rank
-    #       matrix. I think this is related to October 19, 2023 NOTICE on repo.
-    # ncorrs <- V[, 1:k] %*% (sqrt(sv[1:k]) * beta / n)
-    # rownames(ncorrs) <- rownames(V)
-    
-    # This is the python version, it requires NAM_resid but since we're using the
-    # full data instead of subset k, we don't need to do the projection from 
-    # the svd.
     # TODO: something downstream doesn't like the sparse matrix hence not a Matrix here
     ncorrs <- Matrix::colMeans(y[,1] * NAM_resid) |> matrix(ncol = 1)
-
+    rownames(ncorrs) <- colnames(NAM_resid)
+    
     # compute final p-value using Nnull null f-test p-values
-    # TODO: not sure group level is working yet.
+    # TODO: ensure group level is working.
     y_null <- conditional_permutation(Y = y, 
                                       B = batches_vec, 
                                       G = group_vec,
                                       num = Nnull, 
                                       duplicates.ok = allow_duplicate_perms, 
                                       seed = seed)
-    .tmp <- apply(y_null, 2, \(z) minpStats(M, z, ks, U, r, use.logp = use.logp))
+    .tmp <- apply(y_null, 2, \(z) minpStats(M, z, ks, U, r))
+    # return(list(ynull = y_null, M = M, ks = ks, U = U, r = r, mps = .tmp))
     minps_null <- vapply(.tmp, \(x) x$p, numeric(1))
     nullr2s <- vapply(.tmp, \(x) x$r2, numeric(1))
     # add sqrt(.Machine$double.eps) for floating point maths and add 1 to avoid pfinal = 0
     pfinal <- (sum(minps_null <= p + sqrt(.Machine$double.eps)) + 1)/(Nnull + 1)
     if (sum(minps_null <= p + sqrt(.Machine$double.eps)) == 0) {
         warning("global association p-value attained minimal possible value.", 
-                "Consider increasing Nnull", immediate. = TRUE)
+                "Consider increasing Nnull", immediate. = TRUE, call. = FALSE)
     }
     
     fdr_5p_t <- NULL 
@@ -284,37 +251,29 @@ innerAssociation <- function(NAMres,
         Nnull <- min(1000, ncol(y_null))
         y_null <- y_null[, 1:Nnull]
         ycond_null <- M %*% y_null
-        # Need to check Scale w/ ddof = 0
-        ycond_null <- scale(ycond_null, center = FALSE, scale = TRUE)
-        # gamma_null <- crossprod(U[, 1:k], ycond_null)
-        # TODO: original cna code uses the full rank matrix, while we use k rank
-        #       matrix. I think this is related to October 19, 2023 NOTICE on repo.
-        # # ncorrs_null <- abs(V[, 1:k] %*% (sqrt(sv[1:k])*(gamma_null / n)))
-        # TODO: Error in max(c(abs(ncorrs), abs(ncorrs_null))) : 
+        ycond_null <- Scale(ycond_null, center = FALSE, scale = TRUE, method = "sd")
+        # TODO: Something downstream doesn't like sparse matrices
+        #   Error in max(c(abs(ncorrs), abs(ncorrs_null))) : 
         #           invalid 'type' (list) of argument
         ncorrs_null <- abs(Matrix::crossprod(NAM_resid, ycond_null) / n) |> 
             as.matrix()
         
         # use both ncorrs and ncorrs_null to make sure we observe full range
-        maxcorr <- max(c(abs(ncorrs), abs(ncorrs_null))) + sqrt(.Machine$double.eps)
-        # using bins way outside the range generates NaN since both
-        # NULL and data have 0 counts in the bins. However, starting at 0
-        # avoids shenanigans in empirical_fdrs()
+        # maxcorr <- max(max(abs(ncorrs)), 0.001)
+        maxcorr <- max(c(abs(ncorrs), abs(ncorrs_null), 0.001)) + sqrt(.Machine$double.eps)
         n.bins <- 400
-        fdr_thresholds <- seq(0, maxcorr, maxcorr/n.bins) # from = maxcorr/4
+        fdr_thresholds <- seq(from = maxcorr/4, maxcorr, maxcorr/n.bins)
         fdrs <- empirical_fdrs(z = ncorrs, 
                                znull = ncorrs_null, 
-                               thresholds = fdr_thresholds) # was fdr_vals
-        # TODO: filter fdrs where num_detected = 0 ?
-        # starting from last until we observe the first non-0?
+                               thresholds = fdr_thresholds) 
         
         # find maximal FDR<5% and FDR<10% sets
-        if (min(fdrs$fdr) > 0.05) {        
+        if (min(fdrs$fdr) > 0.05) {
             fdr_5p_t <- NULL
         } else {
-            fdr_5p_t <- min(subset(fdrs, fdr <= 0.05)$threshold)        
+            fdr_5p_t <- min(subset(fdrs, fdr <= 0.05)$threshold)
         }
-        if (min(fdrs$fdr) > 0.10) {        
+        if (min(fdrs$fdr) > 0.10) {
             fdr_10p_t <- NULL
         } else {
             fdr_10p_t <- min(subset(fdrs, fdr <= 0.1)$threshold)
@@ -325,6 +284,7 @@ innerAssociation <- function(NAMres,
                 minps_null = minps_null,
                 k = k,
                 ncorrs = ncorrs, 
+                ncorrs_null = ncorrs_null,
                 fdrs = fdrs,
                 fdr_5p_t = fdr_5p_t, 
                 fdr_10p_t = fdr_10p_t,
@@ -335,45 +295,21 @@ innerAssociation <- function(NAMres,
                 r2 = r2, 
                 r2_perpc = r2_perpc,
                 nullr2_mean = mean(nullr2s), 
-                nullr2_std = sd(nullr2s),
+                nullr2_std = stats::sd(nullr2s),
                 seed = seed)
-    
+
     return(res)
 }
 
 #' Main function to perform CNA association analysis
 #' 
-#' @param data a list containing: 
-#' \describe{
-#'   \item{samplem}{
-#'      A data.frame containing sample-level metadata. Must have a single row 
-#'      for each sample in the data.
-#'   }
-#'   \item{obs}{
-#'      A data.frame containing cell-level metadata. Must have a single row for
-#'      each cell in the data. Must have at least 2 columns, one for cell id and
-#'      one for sample id. 
-#'   }
-#'   \item{connectivities}{
-#'      A symmetric weighted adjacency sparseMatrix. Likely generated during UMAP 
-#'      calculation.
-#'   }
-#'   \item{samplem_key}{
-#'      A character string indicating the column in `samplem` uniquely identifying 
-#'      samples.
-#'   }
-#'   \item{obs_key}{
-#'      A character string indicating the column in obs uniquely identifying cells.
-#'   }
-#'   \item{N}{
-#'      A numeric scalar indicating the number of samples i.e. nrow(samplem).
-#'   }
-#' }
+#' @description The core function of CNA, builds the NAM, and tests y for 
+#' association with neighborhoods.
+#' 
+#' @param data a list
 #' @param nam.result Optional. A pre-computed result list from [nam()]. If
-#' supplied, the NAM construction step is skipped and \code{data} is only used
-#' to build the batch factor \code{X} for permutation. If both \code{data} and
-#' \code{nam.result} are supplied, \code{nam.result} is used with a warning.
-#' Default: missing (i.e. \code{data} is used instead).
+#' supplied, the NAM construction step is skipped. If both `data` and
+#' `nam.result` are supplied, `nam.result` is used with a warning.
 #' @param y A character string specifying the column in `samplem` containing
 #' the variable of interest.
 #' @param batches A character string specifying the column in `samplem` 
@@ -382,9 +318,9 @@ innerAssociation <- function(NAMres,
 #' @param covs A character string or vector specifying the column(s) in `samplem` 
 #' containing the covariate variables.\cr
 #' Default: NULL
-#' @param group A character sting specyfing the column in `samplem` containing
+#' @param donors A character sting specyfing the column in `samplem` containing
 #' a grouping variable. If batch is NULL, then Null permutations are permuted based
-#' on group. \cr
+#' on donors. \cr
 #' Default: NULL
 #' @param n.steps Number of steps to take during the random walk. If specified then
 #' exactly this many steps is taken on the random walk. \cr
@@ -414,19 +350,29 @@ innerAssociation <- function(NAMres,
 #' @param local.test Logical. If TRUE, neighbourhood-level association
 #' scores and empirical FDRs are computed in addition to the global test.\cr
 #' Default: TRUE.
-#' @param use.logp A logical whether the log transformed p-value value should be 
-#' calculated. Set to TRUE if your FDRs are incredibly small or 0. \cr
-#' Default: FALSE
 #' @param seed An integer seed for the permutation RNG, or NULL for a
 #' randomly selected seed. In either case, the seed is returned in the result to 
 #' allow reproducible results if needed.\cr
 #' Default: NULL
 #' @param verbose Logical controlling the verbosity of the function.\cr
 #' Default: FALSE
-#' @param ... Additional parameters passed to [nam()]
+#' @param ... Additional parameters passed to \code{\link{nam}}
 #' 
+#' @details The list object that cna expects is:
+#'  * `samplem` A data.frame containing sample-level metadata. Must have a single 
+#'  row for each sample in the data.#'      
+#'  * `obs` A data.frame containing cell-level metadata. Must have a single row 
+#'  for each cell in the data. Must have at least 2 columns, one for cell id and
+#'  one for sample id. #'      
+#'  * `connectivities` A symmetric weighted adjacency \code{\link[Matrix]{sparseMatrix}}. 
+#'  Likely generated during UMAP calculation.#'   
+#'  * `samplem_key` A character string indicating the column in \code{samplem} 
+#'  uniquely identifying samples.
+#'  * `obs_key` A character string indicating the column in obs uniquely identifying 
+#'  cells.#'   
+#'  * `N` A numeric scalar indicating the number of samples i.e. nrow(samplem).
+#'  
 #' @return A named list with the following elements:
-#' \describe{
 #'   \item{p}{
 #'      Empirical global association p-value from permutation test.
 #'   }
@@ -443,8 +389,8 @@ innerAssociation <- function(NAMres,
 #'      corresponding to neighborhoods.
 #'   }
 #'   \item{fdrs}{
-#'      Data frame of FDR results from [empirical_fdrs()], or NULL if 
-#'      `local_test = FALSE`. Columns: `threshold`, `fdr`, `num_detected`.
+#'      Data frame of FDR results from \code{\link{empirical_fdrs}}, or NULL if 
+#'      \code{local_test = FALSE}. Columns: \code{threshold}, \code{fdr}, \code{num_detected}.
 #'   }
 #'   \item{fdr_5p_t}{
 #'      Numeric scalar. Minimum threshold achieving FDR < 5\%, or NULL if none exists.
@@ -452,32 +398,54 @@ innerAssociation <- function(NAMres,
 #'   \item{fdr_10p_t}{
 #'      Numeric scalar. Minimum threshold achieving FDR < 10\%, or NULL if none exists.
 #'   }
-#'   \item{yhat}{Fitted values of \code{y} from the selected k-component model.}
-#'   \item{ycond}{Batch/covariate-conditioned and scaled \code{y} vector.}
-#'   \item{ks}{Numeric vector of k values that were tested.}
-#'   \item{beta}{Regression coefficients for the selected k-component model.}
-#'   \item{r2}{R-squared for the selected model.}
-#'   \item{r2_perpc}{Per-PC contribution to R-squared, length \code{k}.}
-#'   \item{nullr2_mean}{Mean R-squared across null permutations.}
-#'   \item{nullr2_std}{Standard deviation of R-squared across null permutations.}
-#'   \item{seed}{The integer seed used for permutations, for reproducibility.}
-#'   \item{NAM_embeddings}{The Neighborhood x PCs matrix (The Left singular vectors 
-#'   returned by [svd()]). If \code{return.nam = TRUE}}
-#'   \item{NAM_loadings}{The Sample x PCs matrix (The Right singular vectors 
-#'   returned by [svd()]). If \code{return.nam = TRUE}}
-#'   \item{NAM_svs}{The _squared_ singular values returned by [svd()]. 
-#'   If \code{return.nam = TRUE}}
-#' }
+#'   \item{yhat}{
+#'      Fitted values of \code{y} from the selected k-component model.
+#'   }
+#'   \item{ycond}{
+#'      Batch/covariate-conditioned and scaled \code{y} vector.
+#'   }
+#'   \item{ks}{
+#'      Numeric vector of k values that were tested.
+#'   }
+#'   \item{beta}{
+#'      Regression coefficients for the selected k-component model.
+#'   }
+#'   \item{r2}{
+#'      R-squared for the selected model.
+#'   }
+#'   \item{r2_perpc}{
+#'      Per-PC contribution to R-squared, length \code{k}.
+#'   }
+#'   \item{nullr2_mean}{
+#'      Mean R-squared across null permutations.
+#'   }
+#'   \item{nullr2_std}{
+#'      Standard deviation of R-squared across null permutations.
+#'   }
+#'   \item{seed}{
+#'      The integer seed used for permutations, for reproducibility.
+#'   }
+#'   \item{NAM_embeddings}{
+#'      The Neighborhood x PCs matrix (The Left singular vectors returned by 
+#'      \code{\link[base]{svd}}). If \code{return.nam = TRUE}
+#'   }
+#'   \item{NAM_loadings}{
+#'      The Sample x PCs matrix (The Right singular vectors returned by 
+#'      \code{\link[base]{svd}}). If \code{return.nam = TRUE}
+#'   }
+#'   \item{NAM_svs}{
+#'      The _squared_ singular values returned by \code{\link[base]{svd}}. 
+#'      If \code{return.nam = TRUE}
+#'   }
 #' 
 #' @export 
 association <- function(data, nam.result, y, 
                         batches = NULL, 
                         donors = NULL,
                         covs = NULL, 
-                        group = NULL,
                         n.steps = NULL, 
                         suffix = '',
-                        return.nam = FALSE, 
+                        return.nam = TRUE, 
                         filter.samples = NULL,
                         # passed to inner association
                         Ks = NULL, 
@@ -485,7 +453,6 @@ association <- function(data, nam.result, y,
                         force.permute.all = FALSE, 
                         allow.duplicate.perms = TRUE,
                         local.test = TRUE, 
-                        use.logp = FALSE,
                         seed = NULL,
                         verbose = TRUE, 
                         ...) {
@@ -513,9 +480,10 @@ association <- function(data, nam.result, y,
         stopifnot(data$samplem_key %in% colnames(data$obs))
         stopifnot(!is.numeric(data$obs[,data$samplem_key]))
     }
-    # TODO: check NAs in batches and covariates.
+    
     stopifnot(is.null(batches) || (length(batches) == 1  && is.character(batches)))
     stopifnot(is.null(donors) || (length(donors) == 1  && is.character(donors)))
+    
     if(!is.null(n.steps)){
         stopifnot(length(n.steps) == 1 && is.numeric(n.steps))
     }
@@ -526,14 +494,11 @@ association <- function(data, nam.result, y,
     stopifnot(length(force.permute.all) == 1 && is.logical(force.permute.all))
     stopifnot(length(allow.duplicate.perms) == 1 && is.logical(allow.duplicate.perms))
     stopifnot(length(local.test) == 1 && is.logical(local.test))
-    stopifnot(length(use.logp) == 1 && is.logical(use.logp))
     stopifnot(length(verbose) == 1 && is.logical(verbose))
     
     if(!is.null(Ks)){
         stopifnot(is.numeric(Ks))
     }
-    
-    ## TODO: add sample filtering 
     
     if (verbose) message('Build NAM PCs')
     if(missing(nam.result)){
@@ -549,21 +514,7 @@ association <- function(data, nam.result, y,
     } else {
         nam_res <- nam.result
     }
-    
-    ### TODO: remove 0 variance columns (cells)
-    # # filter samples and drop any columns that then have zero variance
-    # NAM = NAM[filter_samples]
-    # zero_variance_col_ix = np.where(NAM.std(axis=0) == 0)[0]
-    # nz_ix = np.flatnonzero(kept)
-    # kept[nz_ix[zero_variance_col_ix]] = False
-    # NAM = NAM.drop(columns=NAM.columns[zero_variance_col_ix])
-    
-    # if (is.null(nam_res[['_batches']])) {
-    #     X <- rep(1, length(nam_res[['y']])) |> as.factor()
-    # } else {
-    #     X <- nam_res[['_batches']]
-    # }
-    
+
     if (verbose) message('Perform association testing')
     res <- innerAssociation(NAMres = nam_res,
                             ks = Ks, 
@@ -571,13 +522,10 @@ association <- function(data, nam.result, y,
                             force_permute_all = force.permute.all, 
                             allow_duplicate_perms = allow.duplicate.perms, 
                             local_test = local.test, 
-                            use.logp = use.logp, 
                             seed = seed,
                             verbose = verbose)
     if (return.nam) {
-        res[[paste0('NAM_embeddings', suffix)]] <- nam_res[[paste0("NAM_nbhdXpc", suffix)]]
-        res[[paste0('NAM_loadings', suffix)]] <- nam_res[[paste0("NAM_sampleXpc", suffix)]]
-        res[[paste0('NAM_svs', suffix)]] <- nam_res[[paste0("NAM_svs", suffix)]]
+        res <- c(res, nam_res)
     }
     
     return(res)

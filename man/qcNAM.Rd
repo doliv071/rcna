@@ -14,6 +14,9 @@ calculated by [buildNAM()]}
 batch QC is performed (this is for pass-through). \cr
 Default: NULL}
 
+\item{donors}{A factor containing donor information.\cr
+Default NULL}
+
 \item{min.threshold}{A numeric scalar defining the minimum value which the 
 threshold should take.\cr
 Default: 6}
@@ -30,6 +33,7 @@ Filter NAM based on batch level kurtosis
 }
 \note{
 min.threshold is 6 here, to keep functionality the same as initially 
-written, but there is no mention of this in the paper.
+written, but there is no mention of this in the paper. The rationale for the
+choice is that 6 is "a lot" of kurtosis for a normally distributed variable.
 }
 \keyword{internal}

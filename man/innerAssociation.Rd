@@ -11,7 +11,6 @@ innerAssociation(
   force_permute_all = FALSE,
   allow_duplicate_perms = TRUE,
   local_test = TRUE,
-  use.logp = FALSE,
   seed = NULL,
   verbose = FALSE
 )
@@ -42,24 +41,15 @@ Default: TRUE.}
 correlations. \cr
 Default: TRUE}
 
-\item{use.logp}{A logical whether the log transformed p-value value should be 
-calculated. Set to TRUE if your FDRs are incredibly small or 0. \cr
-Default: FALSE}
-
 \item{seed}{A numeric seed to set. Set if you want to repeat exact permutations
 as a previous run. If NULL, a random seed is chosen. \cr
 Default: NULL}
 
 \item{verbose}{A logical controlling verbosity.\cr
 Default: FALSE}
-
-\item{y}{A vector with contrast variable value to be tested for association.}
-
-\item{batches_vec}{NULL or a factor of batches to adjust for.}
 }
 \value{
 A named list with the following elements:
-\describe{
   \item{p}{Empirical global association p-value from permutation test.}
   \item{minps_null}{Numeric vector of length \code{Nnull} containing the
     minimum permutation p-values from the null distribution.}
@@ -83,7 +73,6 @@ A named list with the following elements:
   \item{nullr2_mean}{Mean R-squared across null permutations.}
   \item{nullr2_std}{Standard deviation of R-squared across null permutations.}
   \item{seed}{The integer seed used for permutations, for reproducibility.}
-}
 }
 \description{
 Calculate global and (optionally) local association tests.

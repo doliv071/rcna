@@ -1,66 +1,49 @@
 test_that("stats working as expected", {
-    y <- rnorm(16)
-    b <- sample(letters[1:4], 16, replace = TRUE) |> factor()
-    g <- sample(LETTERS[1:2], 16, replace = TRUE) |> factor()
+    set.seed(42)
+    y <- rnorm(8)
+    set.seed(42)
+    b <- sample(letters[1:4], 8, replace = TRUE) |> factor()
+    set.seed(42)
+    g <- sample(LETTERS[1:2], 8, replace = TRUE) |> factor()
     nnull <- 10
+    # conditional_permutation
+    conditional_permutation() |> expect_error()
+    foo <- conditional_permutation(Y = y, num = nnull)
+    expect_equal(dim(foo), c(length(y), nnull)) 
+    
     foo <- conditional_permutation(Y = y, B = b, num = nnull)
     expect_equal(dim(foo), c(length(y), nnull))
     
-    NAMres <- nam(data = make_rcna_data(y.sd = 3), y = "y", batches = NULL, covs = NULL)
+    conditional_permutation(Y = y, B = b, G = g, num = nnull) |> 
+        expect_warning()
+    suppressWarnings( # Warning: Found 530 duplicated permutations.
+        foo <- conditional_permutation(Y = y, G = g, 
+                                       num = 1000, seed = 11,
+                                       duplicates.ok = FALSE)
+    )
+    expect_equal(dim(foo), c(length(y), 470)) 
     
-    ### This is pulle from innerNAM so we can work with pretend real data? should we?
-    U <- NAMres[["NAM_sampleXpc"]]
-    sv <- NAMres[["NAM_svs"]]
-    V <- NAMres[["NAM_nbhdXpc"]]
-    M <- NAMres[["_M"]] 
-    r <- NAMres[["_r"]]
-    y <- scale(NAMres[["y"]])
-    n <- length(y)
-    batches_vec = NAMres[["_batches"]]
-    group_vec = NAMres[["_donors"]]
+    # 10k cells to test
+    ncells <- 10000
+    set.seed(42)
+    z_corrs <- matrix(runif(ncells, -1, 1), ncol = 1)
+    z_nulls <- lapply(1:100, \(i) {runif(ncells, -0.9, 0.9)}) |> 
+        unlist() |> matrix(ncol = 100)
+    br <- seq(0, 1, length.out = 400)
     
-    ks <- seq(n/50, n/5, by = 1) |> ceiling() |> unique()
-    k <- minpStats(M, y, ks, U, r)$k
-    
-    ycond <- scale(M %*% y, center = FALSE, scale = TRUE)
-    beta <- regress(ycond, k, U)$beta
-    ncorrs <- V[, 1:k] %*% (sqrt(sv[1:k]) * beta / n)
-    rownames(ncorrs) <- rownames(V)
-    
-    # compute final p-value using Nnull null f-test p-values
-    y_null <- conditional_permutation(Y = y, 
-                                      B = batches_vec, 
-                                      G = group_vec,
-                                      num = nnull, 
-                                      duplicates.ok = TRUE)
+    # each column is a break
+    # each row is an "experiment"
+    tcz <- tail_counts(breaks = br, z = z_corrs)
+    expect_equal(dim(tcz), c(1, 400))
+    tcn <- tail_counts(breaks = br, z = z_nulls)
+    expect_equal(dim(tcn), c(100, 400))
 
-    Nnull <- min(1000, ncol(y_null))
-    y_null <- y_null[, 1:Nnull]
-    ycond_null <- scale(M %*% y_null, center = FALSE, scale = TRUE)
-    gamma_null <- crossprod(U[, 1:k], ycond_null)  
-    ncorrs_null <- abs(V[, 1:k] %*% (sqrt(sv[1:k])*(gamma_null / n)))
     
-    maxcorr <- max(c(abs(ncorrs), abs(ncorrs_null))) + sqrt(.Machine$double.eps)
-    fdr_thresholds <- seq(0, maxcorr, maxcorr/400) 
-    
-    nthresh <- length(fdr_thresholds) - 1
-    tails <- tail_counts(breaks = fdr_thresholds, z = ncorrs_null)[1:nthresh, ] |> t()
-    expect_equal(dim(tails), c(nnull, nthresh))
-    
-    ranks <- tail_counts(breaks = fdr_thresholds, z = ncorrs)[1:nthresh, ] |> t()
-    expect_equal(dim(ranks), c(1, nthresh))
-    
-    fdp <- sweep(tails, 2, ranks, '/')
-    
-    valid_thresh <- setdiff(1:ncol(fdp), unique(which(is.na(fdp), arr.ind = TRUE)[,2]))
-    ret_thresh <- fdr_thresholds[valid_thresh]
-    fdp <- fdp[,valid_thresh]
-    
-    fdp[fdp > 1] <- 1
-    fdr <- Matrix::colMeans(fdp)
-    
-    fdr_monotone <- cummin(fdr)
-    fdrs <- empirical_fdrs(z = ncorrs, znull = ncorrs_null, thresholds = fdr_thresholds)
-    
+    fdrs <- empirical_fdrs(z = z_corrs, 
+                           znull = z_nulls, 
+                           thresholds = br)
+    expect_s3_class(fdrs, "data.frame")
+    expect_equal(ncol(fdrs), 3)
+    expect_equal(colnames(fdrs), c("threshold", "fdr", "num_detected"))
 })
 

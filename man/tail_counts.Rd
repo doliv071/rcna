@@ -2,21 +2,28 @@
 % Please edit documentation in R/stats.R
 \name{tail_counts}
 \alias{tail_counts}
-\title{calculate the number of correlations within each threshold}
+\title{calculate the number of coefficients within each threshold}
 \usage{
-tail_counts(breaks, z)
+tail_counts(breaks, z, atol = sqrt(.Machine$double.eps), rtol = 1e-05)
 }
 \arguments{
 \item{breaks}{A vector of thresholds}
 
-\item{z}{A matrix of correlations}
+\item{z}{A matrix of coefficients}
+
+\item{atol}{A small numeric value to adjust bins to enforce corr <= bin edge.
+It is subtracted directly from the breaks}
+
+\item{rtol}{A small numeric value to adjust bins to enforce corr <= bin edge.
+It is first multiplied by the squared coefficients before subtracting from the 
+breaks.}
 }
 \value{
-A numeric matrix of dimensions (\code{length(breaks) - 1} x \code{ncol(z)}), 
+A numeric matrix of dimensions (\code{length(breaks)} x \code{ncol(z)}), 
 where entry [i, j] is the number of rows in column j of \code{z} whose squared 
 value exceeds \code{breaks[i]^2}.
 }
 \description{
-calculate the number of correlations within each threshold
+calculate the number of coefficients within each threshold
 }
 \keyword{internal}

@@ -11,6 +11,9 @@ residNAM(
   donors = NULL,
   partial.by = c("batches", "covariates"),
   ridges = NULL,
+  ridge.crit = c("kurtosis", "gcv"),
+  ddof = 0L,
+  scale.method = "sd",
   verbose = FALSE
 )
 }
@@ -24,7 +27,8 @@ Default NULL}
 \item{batch}{A factor containing batch information.\cr
 Default NULL}
 
-\item{donors}{STUB}
+\item{donors}{A factor containing donor information.\cr
+Default NULL}
 
 \item{partial.by}{A character string. One of NULL, "batches", or "covariates". 
 Ridge penalties are only applied to those variables specified.
@@ -35,6 +39,17 @@ Default: NULL}
 \item{ridges}{A numeric vector of ridge penalties to try. If NULL, a default
 set of ridges centered on `svd(X)$d[1]^2` is used.\cr
 Default NULL}
+
+\item{ridge.crit}{A character string specifying how the ridge regression should
+select optimal ridges. One of c("gcv", "kurtosis"). Use "kurtosis" to match
+original cna implementation.\cr
+# Default: "kurtosis"}
+
+\item{ddof}{An integer controlling whether the population or sample denominator
+is used for scaling the NAM. Set to 1L to calculate R's default `n - 1`
+denominator for the standard deviation. Default is 0L to use `n` in the denominator
+matching pythons std() calculation. \cr
+Default: 0L}
 }
 \value{
 A list containing the residuals NAM (NAM), the annihilator matrix 
@@ -45,7 +60,7 @@ consumed (r).
 remove batch effects (including continuous covariates)
 }
 \note{
-assumes that covariates are not categorical
+assumes that covariates are continuous
 
 If both batch and cov.mat are null, this is a passthrough for centering
 and scaling the nam.

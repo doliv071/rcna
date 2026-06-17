@@ -4,7 +4,7 @@
 \alias{Scale}
 \title{A scale function for sparseMatrix}
 \usage{
-Scale(x, center = TRUE, scale = TRUE, ddof = 1L)
+Scale(x, center = TRUE, scale = TRUE, ddof = 1L, method = c("rms", "sd"))
 }
 \arguments{
 \item{x}{A sparseMatrix}
@@ -18,6 +18,10 @@ Default: TRUE}
 \item{ddof}{An integer, either 0 or 1 specifying the denominator degrees of
 freedom. Use 1L for the n - 1 denominator and 0L for n denominator.
 Default: 1L}
+
+\item{method}{A character string specifying the method for calculating the 
+scaling vector. "rms" uses root-mean-square and "sd" uses standard deviation.
+If centering then these are equivalent.}
 }
 \value{
 A dense sparseMatrix ("dgeMatrix")

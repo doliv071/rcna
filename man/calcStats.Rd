@@ -4,7 +4,7 @@
 \alias{calcStats}
 \title{Calculate the F-test p-value}
 \usage{
-calcStats(yhat, ycond, k, n, r, log.p = FALSE)
+calcStats(yhat, ycond, k, n, r)
 }
 \arguments{
 \item{yhat}{y fit to the data. Must be a numeric vectors of length n.}
@@ -16,10 +16,7 @@ of length n.}
 
 \item{n}{The number of samples.}
 
-\item{r}{degrees of freedom consumed by batch correction in [residNAM()].}
-
-\item{log.p}{A logical whether the log transformed p-value value should be 
-calculated.\cr
+\item{r}{degrees of freedom consumed by batch correction in [residNAM()].
 Default: FALSE}
 }
 \value{

@@ -9,6 +9,7 @@ ridgeNAM(
   cov.mat = NULL,
   batch = NULL,
   ridges = NULL,
+  ridge.crit = c("kurtosis", "gcv"),
   partial = NULL,
   verbose = FALSE
 )
@@ -26,6 +27,11 @@ Default: NULL}
 \item{ridges}{A vector of ridges to try or NULL. If NULL ridges are calculated
 automatically centered on `svd(X)$d[1]^2`. \cr
 Default: NULL}
+
+\item{ridge.crit}{A character string specifying how the ridge regression should
+select optimal ridges. One of c("gcv", "kurtosis"). Use "kurtosis" to match
+original cna implementation.
+# Default: "kurtosis"}
 
 \item{partial}{A character string or NULL. If NULL, ridge regression is performed
 on all variables. If a character, specify which set of variables ridge regression

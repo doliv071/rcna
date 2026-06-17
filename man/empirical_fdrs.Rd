@@ -13,7 +13,7 @@ correlations}
 \item{znull}{A correlation matrix with p-permutations columns containing the 
 permuted null correlations}
 
-\item{threshold}{a vector of bins for the distribution}
+\item{thresholds}{a vector of bins for the distribution}
 }
 \value{
 A data.frame containing thresholds, FDRs, and number of neighborhoods 

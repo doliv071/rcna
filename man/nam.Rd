@@ -18,6 +18,9 @@ nam(
   max.frac.pcs = 0.15,
   partial.by = c("batches", "covariates"),
   ridges = NULL,
+  ridge.crit = c("kurtosis", "gcv"),
+  ddof = 0L,
+  scale.method = c("rms", "sd"),
   suffix = "",
   filter.samples = NULL,
   verbose = FALSE
@@ -38,6 +41,9 @@ the variable of interest is stored.}
 \item{batches}{A character string denoting the column in `data$samplem` where
 batch information is stored. Only a single batch variable is allowed. \cr
 Default: NULL}
+
+\item{donors}{A factor containing donor information.\cr
+Default NULL}
 
 \item{covs}{A character string or vector denoting the column(s) `data$samplem`
 where continuous covariate information is stored.\cr
@@ -69,14 +75,31 @@ and the maximum is the number of samples minus 1. \cr
 Default: 0.15}
 
 \item{partial.by}{A character string. One of NULL, "batches", or "covariates". 
-Ridge penalties are only applied to those variables specified..
-If null then all variables are penalized. Setting to "batches" will reproduce
-original behavior.\cr
+Ridge penalties are only applied to those variables specified.
+If NULL then all variables are penalized. Setting to "batches" will reproduce
+original cna behavior.\cr
 Default: NULL}
 
 \item{ridges}{A numeric vector of ridges to try during ridge regression. When
 NULL ridges are calculated automatically. \cr
 Default: NULL}
+
+\item{ridge.crit}{A character string specifying how the ridge regression should
+select optimal ridges. One of c("gcv", "kurtosis"). Use "kurtosis" to match
+original cna implementation.\cr
+Default: "kurtosis"}
+
+\item{ddof}{An integer controlling whether the population or sample denominator
+is used for scaling the NAM. Default is 0L which calculates python's default 
+denominator for the standard deviation. Set to 1L to use R's default `n - 1` 
+in the denominator. \cr
+Default: 0L}
+
+\item{scale.method}{Character string specifying the method to use for scaling
+the data. Because [base::scale] uses root mean square, this option allows 
+scaling by standard deviation "sd" as an alternative. Use "sd" to mimic python
+implementation of CNA, and "rms" to use R defaults. See [Scale] for details.\cr
+Default: "sd"}
 
 \item{suffix}{A character scalar for optionally adding a suffix to the output
 components. \cr
@@ -84,27 +107,26 @@ Default: ""}
 
 \item{filter.samples}{STUB. Not used currently.}
 
-\item{verbose}{Logical scalar controlling verbosity. \cr
+\item{verbose}{Logical controlling the verbosity of the function.\cr
 Default: FALSE}
 }
 \value{
 A named list. All keys are optionally suffixed by \code{suffix}.
-\describe{
   \item{y}{Numeric vector of the (possibly coerced) response variable.}
   \item{raw.NAM.T}{sparseMatrix. Transposed raw NAM (cells × samples) before
     QC or residualisation.}
   \item{qc.NAM.T}{sparseMatrix. Transposed NAM after batch-kurtosis QC.}
   \item{resid.NAM.T}{sparseMatrix. Transposed NAM after residualisation.}
-  \item{_M}{The annihilator matrix from [residNAM()].}
-  \item{_r}{Numeric. Degrees of freedom consumed by the correction.}
+  \item{M}{The annihilator matrix from [residNAM()].}
+  \item{r}{Numeric. Degrees of freedom consumed by the correction.}
   \item{NAM_sampleXpc}{Matrix (samples × PCs): left singular vectors.}
   \item{NAM_svs}{Numeric vector of squared singular values.}
   \item{NAM_varexp}{Numeric vector of variance explained per PC.}
   \item{NAM_nbhdXpc}{Matrix (cells × PCs): right singular vectors.}
   \item{keptcells}{Integer index vector of retained cell columns after QC.}
-  \item{_batches}{Factor of batch labels, or \code{NULL}.}
+  \item{batches}{Factor of batch labels, or \code{NULL}.}
+  \item{donors}{Factor of donor labels, or \code{NULL}.}
   \item{covariates}{sparseMatrix of covariates, or \code{NA_real_} if none.}
-}
 }
 \description{
 Build and decompose a neighborhood abundance matrix

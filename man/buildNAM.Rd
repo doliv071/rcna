@@ -40,9 +40,4 @@ association matrix).
 \description{
 Calculate Neighborhood Association Matrix (NAM) using diffusion mapping
 }
-\note{
-The original code had a bug here where `prevmedkurt <- medkurt` was 
-updated before calculating `prevmedkurt - medkurt` and so only a single diffusion
-step was performed.
-}
 \keyword{internal}

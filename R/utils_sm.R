@@ -66,6 +66,7 @@ propTable <- function(x, margin){
     } else {
         stop("Only margins 1 or 2 are supported.")
     }
+    dimnames(res) <- dimnames(x)
     return(res)
 }
 
@@ -79,13 +80,21 @@ propTable <- function(x, margin){
 #' @param ddof An integer, either 0 or 1 specifying the denominator degrees of
 #' freedom. Use 1L for the n - 1 denominator and 0L for n denominator.
 #' Default: 1L
+#' @param method A character string specifying the method for calculating the 
+#' scaling vector. "rms" uses root-mean-square and "sd" uses standard deviation.
+#' If centering then these are equivalent.
 #' 
 #' @note NAs are omitted as in [base::scale()]
 #' 
 #' @returns A dense sparseMatrix ("dgeMatrix")
 #'
 #' @keywords internal
-Scale <- function(x, center = TRUE, scale = TRUE, ddof = 1L){
+Scale <- function(x, 
+                  center = TRUE, 
+                  scale = TRUE, 
+                  ddof = 1L, 
+                  method = c("rms", "sd")){
+    method <- match.arg(method, c("rms", "sd"))
     stopifnot(isa(x, "Matrix") || is.matrix(x))
     stopifnot(any(ddof == c(0L, 1L)))
     if(center){
@@ -93,7 +102,13 @@ Scale <- function(x, center = TRUE, scale = TRUE, ddof = 1L){
         x <- Matrix::t(Matrix::t(x) - centers)
     }
     if(scale){
-        scales <- sqrt(Matrix::colSums(x^2, na.rm = TRUE) / (nrow(x) - ddof))
+        sden <- nrow(x) - ddof
+        if(method == "rms"){
+            scales <- sqrt(Matrix::colSums(x^2, na.rm = TRUE) / sden)
+        } else {
+            xbar <- Matrix::colMeans(x, na.rm = TRUE)
+            scales <- sqrt(Matrix::rowSums((Matrix::t(x) - xbar)^2) / sden)
+        }
         x <- Matrix::t(Matrix::t(x) / scales)
     }
     return(x)

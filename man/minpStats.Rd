@@ -4,7 +4,7 @@
 \alias{minpStats}
 \title{Calculate the p-value for all ks and return the minimum}
 \usage{
-minpStats(M, y, ks, U, r, use.logp = FALSE)
+minpStats(M, y, ks, U, r)
 }
 \arguments{
 \item{M}{The annihilator matrix (M returned by [residNAM])}
@@ -17,10 +17,7 @@ minpStats(M, y, ks, U, r, use.logp = FALSE)
 (U returned by [svdNAM])}
 
 \item{r}{the degrees of freedom already consumed by batch correction 
-(r returned by [residNAM])}
-
-\item{use.logp}{A logical whether the log transformed p-value value should be 
-calculated.\cr
+(r returned by [residNAM])
 Default: FALSE}
 }
 \value{

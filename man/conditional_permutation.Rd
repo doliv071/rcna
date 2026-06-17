@@ -2,7 +2,7 @@
 % Please edit documentation in R/stats.R
 \name{conditional_permutation}
 \alias{conditional_permutation}
-\title{Permute Y conditioned on B}
+\title{Permute Y conditioned on B or G}
 \usage{
 conditional_permutation(
   Y,
@@ -38,6 +38,6 @@ A numeric matrix of dimensions n × m, where `m <= num`.
 Each column is one permutation of `Y` within batch levels.
 }
 \description{
-Permute Y conditioned on B
+Permute Y conditioned on B or G
 }
 \keyword{internal}

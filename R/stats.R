@@ -1,4 +1,4 @@
-#' Permute Y conditioned on B
+#' Permute Y conditioned on B or G
 #' 
 #' @param Y A numeric vector of length n. The variable to permute.
 #' @param B A factor (or object coercible via \code{split()}) of length n
@@ -34,12 +34,9 @@ conditional_permutation <- function(Y,
         seed <- sample(1e6, 1)
     }
     set.seed(seed)
-    # TODO: for certain combinations of length(Y) and B it is better to compute
-    #       all permutations rather than sampling and filtering duplicates.
-
     if(!is.null(B) && !is.null(G)){
-        # TODO: ask 
-        warning("Both batch (B) and group (G) specified. Using only group permutations.")
+        warning("Both batch (B) and group (G) specified. Using only group permutations.",
+                immediate. = TRUE)
         B <- G
     } else if(is.null(B) && !is.null(G)){
         B <- G
@@ -57,7 +54,8 @@ conditional_permutation <- function(Y,
     y_perm <- matrix(unlist(y_perm), nrow = length(y_perm), byrow = TRUE)
     dup_y <- duplicated(y_perm)
     if(sum(dup_y) > 0.2*num){
-        warning("Found ", sum(dup_y), " duplicated permutations.", immediate. = TRUE)
+        warning("Found ", sum(dup_y), " duplicated permutations.", 
+                immediate. = TRUE, call. = FALSE)
     }
     if(!duplicates.ok){
         y_perm <- y_perm[!dup_y,]
@@ -65,26 +63,41 @@ conditional_permutation <- function(Y,
     return(t(y_perm))
 }
 
-#' calculate the number of correlations within each threshold
+#' calculate the number of coefficients within each threshold
 #'
 #' @param breaks A vector of thresholds 
-#' @param z A matrix of correlations 
+#' @param z A matrix of coefficients 
+#' @param atol A small numeric value to adjust bins to enforce corr <= bin edge.
+#' It is subtracted directly from the breaks
+#' @param rtol A small numeric value to adjust bins to enforce corr <= bin edge.
+#' It is first multiplied by the squared coefficients before subtracting from the 
+#' breaks.
 #' 
-#' @returns A numeric matrix of dimensions (\code{length(breaks) - 1} x \code{ncol(z)}), 
+#' @returns A numeric matrix of dimensions (\code{length(breaks)} x \code{ncol(z)}), 
 #' where entry [i, j] is the number of rows in column j of \code{z} whose squared 
 #' value exceeds \code{breaks[i]^2}.
 #' 
 #' @keywords internal
-tail_counts <- function(breaks, z) {
-    tailsize <- nrow(z)
-    breaks <- breaks^2
-    z <- z^2
-    res <- apply(z, 2, function(zi) {
-        binsums <- findInterval(zi, breaks) |> 
-            tabulate(nbins = length(breaks) - 1) |> 
-            cumsum()
-        tailsize - binsums
-    })
+tail_counts <- function(breaks, z, atol = sqrt(.Machine$double.eps), rtol = 1e-5) {
+    
+    if (!is.matrix(z) && !isa(z, "Matrix")) {
+        z <- Matrix::Matrix(z, ncol = 1)
+    }
+    
+    n <- length(breaks)
+    z2 <- z^2
+    breaks2  <- breaks^2
+    ix  <- order(breaks2)   
+    iix <- order(ix)   
+    # match python implementation
+    bins <- c(breaks2[ix] - atol - rtol * breaks2[ix], Inf)
+
+    tails <- apply(z2, 2, \(zn2){
+        col <- tabulate(findInterval(zn2, bins), nbins = n)
+        rev(cumsum(rev(col)))
+    }) |> matrix(nrow = n) 
+    
+    res <- t(tails)[, iix, drop = FALSE]
     return(res)
 }
 
@@ -94,7 +107,7 @@ tail_counts <- function(breaks, z) {
 #' correlations
 #' @param znull A correlation matrix with p-permutations columns containing the 
 #' permuted null correlations
-#' @param threshold a vector of bins for the distribution
+#' @param thresholds a vector of bins for the distribution
 #' 
 #' @note The raw per-permutation FDP estimates are averaged across permutations
 #' to obtain the FDR, which is then monotonised via `cummin()` to ensure
@@ -106,12 +119,13 @@ tail_counts <- function(breaks, z) {
 #' @keywords internal
 empirical_fdrs <- function(z, znull, thresholds) {
     n <- length(thresholds) - 1
-    tails <- tail_counts(breaks = thresholds, z = znull)[1:n, ] |> t()
-    ranks <- tail_counts(breaks = thresholds, z = z)[1:n, ] |> t()
+    tails <- tail_counts(thresholds, znull)
+    ranks <- tail_counts(thresholds, z)
     # compute FDPs
     fdp <- sweep(tails, 2, ranks, '/')
     # make sure we didn't over-shoot upper bins too much
-    valid_thresh <- setdiff(1:ncol(fdp), unique(which(is.na(fdp), arr.ind = TRUE)[,2]))
+    # NaN occurs when there are 0 counts in both tails and ranks
+    valid_thresh <- setdiff(1:ncol(fdp), unique(which(is.nan(fdp), arr.ind = TRUE)[,2]))
     ret_thresh <- thresholds[valid_thresh]
     fdp <- fdp[,valid_thresh]
     fdp[fdp > 1] <- 1
@@ -124,38 +138,4 @@ empirical_fdrs <- function(z, znull, thresholds) {
                        num_detected = num_detected) 
     return(fdrs)
 }
-
-
-#' Thoughts on calculating possible permutations ahead of time.
-#' 
-#' @param Y a numeric vector
-#' @param B a factor
-#'
-#' @keywords internal
-#' @noRd
-maxPerms <- function(Y, B){
-    stopifnot(is.factor(B))
-    stopifnot(length(B) == length(Y))
-    
-    grps <- unique(B)
-    n <- length(grps)
-    
-    dups <- duplicated(Y) | duplicated(Y, fromLast = TRUE)
-    dup.grp <- table(B, Y) 
-    if(ncol(dup.grp) < length(Y)){
-        f.num <- vapply(seq_len(n), \(i) sum(B == grps[i]), integer(1)) |> 
-            factorial()
-        f.den <- vapply(split(Y, B), \(x){
-            vapply(seq_along(x), \(i) sum(x == x[i]), integer(1)) |> 
-                unique() |> factorial() |> prod()
-        }, numeric(1), USE.NAMES = FALSE)
-        nperms <- prod(f.num/f.den)
-    } else {
-        nperms <- vapply(seq_len(n), \(i) sum(B == grps[i]), integer(1)) |> 
-            factorial(n.grps) |> prod()
-    } 
-    return(nperms)
-}
-
-
 
