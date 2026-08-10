@@ -32,6 +32,7 @@ Suggests:
     rmarkdown,
     BiocNeighbors,
     SingleCellExperiment,
+    rhdf5,
     anndataR,
     S4Vectors,
     SummarizedExperiment,
